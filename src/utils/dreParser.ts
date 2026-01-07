@@ -83,6 +83,127 @@ export function parseNumber(value: string): number {
   return isNegative ? -Math.abs(num) : num;
 }
 
+// Detect if a value looks like a year (4 digits between 1900-2100)
+function isYear(value: string): boolean {
+  const trimmed = value.trim();
+  const yearMatch = trimmed.match(/^(19|20)\d{2}$/);
+  return !!yearMatch;
+}
+
+// Detect year pattern in an array of values
+function detectYearPattern(values: string[]): { isYearSequence: boolean; years: string[] } {
+  const potentialYears = values.map(v => v.trim()).filter(v => isYear(v));
+  
+  if (potentialYears.length >= 2) {
+    // Check if they form a reasonable sequence
+    const numericYears = potentialYears.map(y => parseInt(y, 10)).sort((a, b) => a - b);
+    const isSequential = numericYears.every((year, idx) => {
+      if (idx === 0) return true;
+      const diff = year - numericYears[idx - 1];
+      return diff >= 1 && diff <= 5; // Allow gaps up to 5 years
+    });
+    
+    if (isSequential) {
+      return { isYearSequence: true, years: numericYears.map(String) };
+    }
+  }
+  
+  return { isYearSequence: false, years: [] };
+}
+
+// Find the row/column that contains years and determine orientation
+function findYearsInData(lines: string[][]): {
+  headerRowIndex: number;
+  accountColumnIndex: number;
+  periods: string[];
+  dataStartRow: number;
+} {
+  // First, check the header row for years
+  if (lines.length > 0) {
+    const headerCells = lines[0];
+    const headerYearInfo = detectYearPattern(headerCells);
+    
+    if (headerYearInfo.isYearSequence) {
+      // Years are in the header - standard format
+      // Find which column is the account column (first non-year or non-numeric column)
+      let accountColIndex = 0;
+      for (let i = 0; i < headerCells.length; i++) {
+        if (!isYear(headerCells[i].trim()) && isNaN(parseNumber(headerCells[i]))) {
+          accountColIndex = i;
+          break;
+        }
+      }
+      
+      const periods = headerCells
+        .filter((_, idx) => idx !== accountColIndex)
+        .map(p => p.trim())
+        .filter(p => p);
+      
+      return {
+        headerRowIndex: 0,
+        accountColumnIndex: accountColIndex,
+        periods,
+        dataStartRow: 1,
+      };
+    }
+  }
+  
+  // Check if years are in the first column of data rows
+  const firstColumnValues = lines.slice(1).map(row => row[0] || '');
+  const firstColYearInfo = detectYearPattern(firstColumnValues);
+  
+  if (firstColYearInfo.isYearSequence) {
+    // Years are in the first column - transposed format
+    // Transpose the data
+    return {
+      headerRowIndex: -1, // Indicates transposed
+      accountColumnIndex: 0,
+      periods: firstColYearInfo.years,
+      dataStartRow: 0,
+    };
+  }
+  
+  // Check each row for year patterns (in case header is not first row)
+  for (let rowIdx = 0; rowIdx < Math.min(lines.length, 5); rowIdx++) {
+    const row = lines[rowIdx];
+    const yearInfo = detectYearPattern(row);
+    
+    if (yearInfo.isYearSequence && yearInfo.years.length >= 2) {
+      // Found years in this row
+      let accountColIndex = 0;
+      for (let i = 0; i < row.length; i++) {
+        if (!isYear(row[i].trim()) && isNaN(parseNumber(row[i]))) {
+          accountColIndex = i;
+          break;
+        }
+      }
+      
+      const periods = row
+        .filter((_, idx) => idx !== accountColIndex)
+        .map(p => p.trim())
+        .filter(p => p);
+      
+      return {
+        headerRowIndex: rowIdx,
+        accountColumnIndex: accountColIndex,
+        periods,
+        dataStartRow: rowIdx + 1,
+      };
+    }
+  }
+  
+  // Fallback: assume first row is header, first column is accounts
+  const headerCells = lines[0] || [];
+  const periods = headerCells.slice(1).map(p => p.trim()).filter(p => p);
+  
+  return {
+    headerRowIndex: 0,
+    accountColumnIndex: 0,
+    periods,
+    dataStartRow: 1,
+  };
+}
+
 export function parsePastedData(text: string): DREData {
   const lines = text.trim().split('\n').filter(line => line.trim());
   
@@ -90,44 +211,46 @@ export function parsePastedData(text: string): DREData {
     throw new Error('Dados insuficientes. Certifique-se de colar pelo menos uma linha de cabeçalho e uma linha de dados.');
   }
   
+  // Split all lines into cells
+  const allCells = lines.map(line => line.split(/\t/));
+  
+  // Detect year pattern and structure
+  const structure = findYearsInData(allCells);
+  
   const rows: DRERow[] = [];
-  let periods: string[] = [];
-  
-  // Parse first line as header (periods)
-  const headerLine = lines[0];
-  const headerCells = headerLine.split(/\t/);
-  
-  if (headerCells.length < 2) {
-    throw new Error('O cabeçalho deve ter pelo menos 2 colunas (Conta e um período).');
-  }
-  
-  // Skip first cell (account column header), rest are periods
-  periods = headerCells.slice(1).map(p => p.trim()).filter(p => p);
+  const periods = structure.periods;
   
   if (periods.length === 0) {
-    throw new Error('Nenhum período encontrado no cabeçalho.');
+    throw new Error('Nenhum período encontrado. Certifique-se de ter colunas com anos (ex: 2020, 2021, 2022).');
   }
   
   // Parse data rows
-  for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split(/\t/);
+  for (let i = structure.dataStartRow; i < allCells.length; i++) {
+    const cells = allCells[i];
     
     if (cells.length < 2) continue;
     
-    const account = cells[0].trim();
+    const account = cells[structure.accountColumnIndex]?.trim();
     if (!account) continue;
     
-    const values: Record<string, number> = {};
-    let hasNumericValue = false;
+    // Skip if the account looks like a year (it's probably a header row)
+    if (isYear(account)) continue;
     
-    for (let j = 0; j < periods.length; j++) {
-      const cellValue = cells[j + 1] || '';
-      const num = parseNumber(cellValue);
-      values[periods[j]] = num;
-      if (num !== 0) hasNumericValue = true;
+    const values: Record<string, number> = {};
+    let valueIndex = 0;
+    
+    for (let j = 0; j < cells.length; j++) {
+      if (j === structure.accountColumnIndex) continue;
+      
+      const cellValue = cells[j] || '';
+      const period = periods[valueIndex];
+      
+      if (period) {
+        values[period] = parseNumber(cellValue);
+      }
+      valueIndex++;
     }
     
-    // Only add rows that have at least one numeric value or are clearly DRE lines
     const category = detectCategory(account);
     
     rows.push({
@@ -143,7 +266,17 @@ export function parsePastedData(text: string): DREData {
     throw new Error('Nenhuma linha de dados válida encontrada.');
   }
   
-  return { rows, periods };
+  // Sort periods if they are years
+  const sortedPeriods = [...periods].sort((a, b) => {
+    const yearA = parseInt(a, 10);
+    const yearB = parseInt(b, 10);
+    if (!isNaN(yearA) && !isNaN(yearB)) {
+      return yearA - yearB;
+    }
+    return 0;
+  });
+  
+  return { rows, periods: sortedPeriods };
 }
 
 export function formatCurrency(value: number, currency: string = 'BRL'): string {
