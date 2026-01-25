@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { DREData, ProjectionPremises, DEFAULT_PREMISES } from '@/types/dre';
 import { DRETable } from '@/components/DRETable';
 import { DataImport } from '@/components/DataImport';
 import { ProjectionWizard } from '@/components/ProjectionWizard';
 import { generateExcel } from '@/utils/excelExporter';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, Table2, Settings2 } from 'lucide-react';
+import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const [dreData, setDreData] = useState<DREData | null>(null);
@@ -77,12 +79,18 @@ const Index = () => {
               <p className="text-xs text-muted-foreground">Projeções financeiras automatizadas</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
             {dreData && (
               <span className="px-3 py-1 rounded-full bg-accent/10 text-accent font-medium">
                 {dreData.rows.length} linhas • {dreData.periods.length} períodos
               </span>
             )}
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/">
+                <ArrowLeft className="w-4 h-4" />
+                Voltar
+              </Link>
+            </Button>
           </div>
         </div>
       </header>
