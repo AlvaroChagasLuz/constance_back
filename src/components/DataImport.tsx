@@ -6,7 +6,7 @@ import { Upload, FileSpreadsheet, ClipboardPaste, FileText, Loader2 } from 'luci
 import { parsePastedData, SAMPLE_DRE } from '@/utils/dreParser';
 import { DREData } from '@/types/dre';
 import { useToast } from '@/hooks/use-toast';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 interface DataImportProps {
   onDataImported: (data: DREData) => void;
@@ -50,87 +50,74 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
     setIsLoading(true);
 
     try {
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        try {
-          const data = e.target?.result;
-          
-          if (type === 'excel') {
-            const workbook = XLSX.read(data, { type: 'binary' });
-            const sheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[sheetName];
-            const csvData = XLSX.utils.sheet_to_csv(worksheet, { FS: '\t' });
-            const dreData = parsePastedData(csvData);
-            onDataImported(dreData);
-          } else {
-            const csvText = data as string;
-            // Convert CSV to tab-separated
-            const lines = csvText.split('\n').map(line => {
-              // Handle quoted values
-              const values: string[] = [];
-              let current = '';
-              let inQuotes = false;
-              
-              for (const char of line) {
-                if (char === '"') {
-                  inQuotes = !inQuotes;
-                } else if ((char === ',' || char === ';') && !inQuotes) {
-                  values.push(current.trim());
-                  current = '';
-                } else {
-                  current += char;
-                }
-              }
-              values.push(current.trim());
-              
-              return values.join('\t');
-            });
-            
-            const dreData = parsePastedData(lines.join('\n'));
-            onDataImported(dreData);
-          }
-
-          toast({
-            title: 'Arquivo importado com sucesso!',
-            description: 'Os dados foram processados e estão prontos para visualização.',
-          });
-        } catch (error) {
-          toast({
-            title: 'Erro ao processar arquivo',
-            description: error instanceof Error ? error.message : 'Formato inválido',
-            variant: 'destructive',
-          });
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      reader.onerror = () => {
-        toast({
-          title: 'Erro ao ler arquivo',
-          description: 'Não foi possível ler o arquivo selecionado.',
-          variant: 'destructive',
-        });
-        setIsLoading(false);
-      };
-
       if (type === 'excel') {
-        reader.readAsBinaryString(file);
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(arrayBuffer);
+        
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+          throw new Error('Nenhuma planilha encontrada no arquivo');
+        }
+
+        // Convert worksheet to tab-separated string
+        const rows: string[] = [];
+        worksheet.eachRow((row) => {
+          const values = row.values as (string | number | null | undefined)[];
+          // ExcelJS row.values is 1-indexed, first element is undefined
+          const cleanValues = values.slice(1).map(v => {
+            if (v === null || v === undefined) return '';
+            return String(v);
+          });
+          rows.push(cleanValues.join('\t'));
+        });
+
+        const csvData = rows.join('\n');
+        const dreData = parsePastedData(csvData);
+        onDataImported(dreData);
       } else {
-        reader.readAsText(file);
+        const text = await file.text();
+        // Convert CSV to tab-separated
+        const lines = text.split('\n').map(line => {
+          // Handle quoted values
+          const values: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (const char of line) {
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if ((char === ',' || char === ';') && !inQuotes) {
+              values.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          values.push(current.trim());
+          
+          return values.join('\t');
+        });
+        
+        const dreData = parsePastedData(lines.join('\n'));
+        onDataImported(dreData);
       }
+
+      toast({
+        title: 'Arquivo importado com sucesso!',
+        description: 'Os dados foram processados e estão prontos para visualização.',
+      });
     } catch (error) {
       toast({
-        title: 'Erro ao carregar arquivo',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
+        title: 'Erro ao processar arquivo',
+        description: error instanceof Error ? error.message : 'Formato inválido',
         variant: 'destructive',
       });
+    } finally {
       setIsLoading(false);
+      // Reset input
+      event.target.value = '';
     }
-
-    // Reset input
-    event.target.value = '';
   }, [onDataImported, toast]);
 
   const loadSample = useCallback(() => {
