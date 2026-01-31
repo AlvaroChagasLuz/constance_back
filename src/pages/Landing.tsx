@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { 
   TrendingUp, 
   Upload, 
@@ -9,15 +11,50 @@ import {
   ArrowRight, 
   Sparkles,
   CheckCircle2,
-  Building2,
-  Users,
-  LineChart,
   Shield,
   Zap,
+  LineChart,
   Target
 } from 'lucide-react';
 
 const Landing = () => {
+  const { t } = useLanguage();
+
+  const features = [
+    {
+      icon: Upload,
+      titleKey: 'features.import.title',
+      descKey: 'features.import.desc',
+      color: 'from-blue-500 to-blue-600'
+    },
+    {
+      icon: BarChart3,
+      titleKey: 'features.premises.title',
+      descKey: 'features.premises.desc',
+      color: 'from-purple-500 to-purple-600'
+    },
+    {
+      icon: FileSpreadsheet,
+      titleKey: 'features.excel.title',
+      descKey: 'features.excel.desc',
+      color: 'from-green-500 to-green-600'
+    }
+  ];
+
+  const howItWorks = [
+    { step: '01', titleKey: 'how.step1.title', descKey: 'how.step1.desc' },
+    { step: '02', titleKey: 'how.step2.title', descKey: 'how.step2.desc' },
+    { step: '03', titleKey: 'how.step3.title', descKey: 'how.step3.desc' }
+  ];
+
+  const benefits = [
+    'benefits.item1',
+    'benefits.item2',
+    'benefits.item3',
+    'benefits.item4',
+    'benefits.item5'
+  ];
+
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* Animated Background */}
@@ -41,21 +78,24 @@ const Landing = () => {
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Recursos
+                {t('nav.features')}
               </a>
               <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Como Funciona
+                {t('nav.howItWorks')}
               </a>
               <a href="#benefits" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Benefícios
+                {t('nav.benefits')}
               </a>
             </div>
-            <Link to="/app">
-              <Button className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25">
-                Começar Agora
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
+            <div className="flex items-center gap-4">
+              <LanguageToggle />
+              <Link to="/app">
+                <Button className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25">
+                  {t('nav.startNow')}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
           </div>
         </div>
       </nav>
@@ -66,23 +106,22 @@ const Landing = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 border border-accent/20 mb-8 animate-fade-in">
             <Sparkles className="w-4 h-4 text-accent" />
-            <span className="text-sm font-medium text-accent">Powered by AI</span>
+            <span className="text-sm font-medium text-accent">{t('hero.badge')}</span>
           </div>
 
           {/* Headline */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight mb-6 animate-fade-in" style={{ animationDelay: '0.1s' }}>
             <span className="bg-gradient-to-r from-foreground via-foreground to-foreground/60 bg-clip-text text-transparent">
-              Transforme sua DRE em
+              {t('hero.title1')}
             </span>
             <br />
             <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-              Projeções Financeiras
+              {t('hero.title2')}
             </span>
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            Automatize a primeira etapa do valuation. Importe dados históricos, 
-            configure premissas e exporte Excel com fórmulas prontas em minutos.
+            {t('hero.subtitle')}
           </p>
 
           {/* CTA Card */}
@@ -95,13 +134,13 @@ const Landing = () => {
                     <Upload className="w-8 h-8 text-white" />
                   </div>
                   <h3 className="text-xl font-semibold text-foreground mb-2">
-                    Importe sua DRE
+                    {t('hero.import')}
                   </h3>
                   <p className="text-muted-foreground mb-4">
-                    Cole do Excel, faça upload de .xlsx ou .csv
+                    {t('hero.importDesc')}
                   </p>
                   <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg">
-                    Começar Valuation
+                    {t('hero.startValuation')}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </div>
@@ -113,15 +152,15 @@ const Landing = () => {
           <div className="mt-16 flex flex-wrap items-center justify-center gap-8 animate-fade-in" style={{ animationDelay: '0.4s' }}>
             <div className="flex items-center gap-2 text-muted-foreground">
               <CheckCircle2 className="w-5 h-5 text-green-500" />
-              <span className="text-sm">100% Gratuito</span>
+              <span className="text-sm">{t('trust.free')}</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <Shield className="w-5 h-5 text-blue-500" />
-              <span className="text-sm">Dados Seguros</span>
+              <span className="text-sm">{t('trust.secure')}</span>
             </div>
             <div className="flex items-center gap-2 text-muted-foreground">
               <Zap className="w-5 h-5 text-yellow-500" />
-              <span className="text-sm">Exportação Instantânea</span>
+              <span className="text-sm">{t('trust.instant')}</span>
             </div>
           </div>
         </div>
@@ -132,17 +171,17 @@ const Landing = () => {
         <div className="container mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {[
-              { value: '10x', label: 'Mais Rápido', icon: Zap },
-              { value: '100%', label: 'Automatizado', icon: Sparkles },
-              { value: '∞', label: 'Projeções', icon: LineChart },
-              { value: '0', label: 'Erros de Fórmula', icon: Target },
+              { value: '10x', labelKey: 'stats.faster', icon: Zap },
+              { value: '100%', labelKey: 'stats.automated', icon: Sparkles },
+              { value: '∞', labelKey: 'stats.projections', icon: LineChart },
+              { value: '0', labelKey: 'stats.noErrors', icon: Target },
             ].map((stat, i) => (
               <div key={i} className="text-center animate-fade-in" style={{ animationDelay: `${0.1 * i}s` }}>
                 <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-primary/10 flex items-center justify-center">
                   <stat.icon className="w-6 h-6 text-primary" />
                 </div>
                 <div className="text-3xl md:text-4xl font-bold text-foreground mb-1">{stat.value}</div>
-                <div className="text-sm text-muted-foreground">{stat.label}</div>
+                <div className="text-sm text-muted-foreground">{t(stat.labelKey)}</div>
               </div>
             ))}
           </div>
@@ -154,37 +193,18 @@ const Landing = () => {
         <div className="container mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Tudo que você precisa para{' '}
+              {t('features.title1')}{' '}
               <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                Valuation
+                {t('features.title2')}
               </span>
             </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Uma solução completa para transformar dados financeiros históricos em projeções profissionais
+              {t('features.subtitle')}
             </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: Upload,
-                title: 'Importação Inteligente',
-                description: 'Cole dados do Excel, faça upload de arquivos .xlsx ou .csv. Detectamos automaticamente anos e categorias.',
-                color: 'from-blue-500 to-blue-600'
-              },
-              {
-                icon: BarChart3,
-                title: 'Premissas Configuráveis',
-                description: 'Defina crescimento de receita, margens, custos e impostos. Wizard passo-a-passo guia todo o processo.',
-                color: 'from-purple-500 to-purple-600'
-              },
-              {
-                icon: FileSpreadsheet,
-                title: 'Excel com Fórmulas',
-                description: 'Exporte planilha completa com DRE histórica, premissas, projeções e resumo. Fórmulas funcionais.',
-                color: 'from-green-500 to-green-600'
-              }
-            ].map((feature, i) => (
+            {features.map((feature, i) => (
               <div 
                 key={i} 
                 className="group p-8 rounded-2xl bg-card border border-border hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 animate-fade-in"
@@ -193,8 +213,8 @@ const Landing = () => {
                 <div className={`w-14 h-14 mb-6 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
                   <feature.icon className="w-7 h-7 text-white" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-3">{feature.title}</h3>
-                <p className="text-muted-foreground">{feature.description}</p>
+                <h3 className="text-xl font-semibold text-foreground mb-3">{t(feature.titleKey)}</h3>
+                <p className="text-muted-foreground">{t(feature.descKey)}</p>
               </div>
             ))}
           </div>
@@ -206,31 +226,15 @@ const Landing = () => {
         <div className="container mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Como Funciona
+              {t('how.title')}
             </h2>
             <p className="text-muted-foreground">
-              Três passos simples para gerar suas projeções
+              {t('how.subtitle')}
             </p>
           </div>
 
           <div className="max-w-4xl mx-auto">
-            {[
-              {
-                step: '01',
-                title: 'Importe sua DRE',
-                description: 'Cole os dados diretamente do Excel ou faça upload do arquivo. O sistema detecta automaticamente os anos e categoriza as contas.'
-              },
-              {
-                step: '02',
-                title: 'Configure as Premissas',
-                description: 'Defina o número de anos projetados, taxas de crescimento, margens operacionais e alíquota de impostos através do wizard intuitivo.'
-              },
-              {
-                step: '03',
-                title: 'Exporte o Excel',
-                description: 'Baixe uma planilha completa com abas de histórico, premissas, projeções e resumo. Todas as fórmulas funcionando.'
-              }
-            ].map((item, i) => (
+            {howItWorks.map((item, i) => (
               <div 
                 key={i} 
                 className="flex gap-6 mb-8 animate-fade-in"
@@ -240,8 +244,8 @@ const Landing = () => {
                   {item.step}
                 </div>
                 <div className="pt-2">
-                  <h3 className="text-xl font-semibold text-foreground mb-2">{item.title}</h3>
-                  <p className="text-muted-foreground">{item.description}</p>
+                  <h3 className="text-xl font-semibold text-foreground mb-2">{t(item.titleKey)}</h3>
+                  <p className="text-muted-foreground">{t(item.descKey)}</p>
                 </div>
               </div>
             ))}
@@ -255,28 +259,22 @@ const Landing = () => {
           <div className="grid md:grid-cols-2 gap-16 items-center">
             <div>
               <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
-                Feito para profissionais de{' '}
+                {t('benefits.title1')}{' '}
                 <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                  M&A e Valuation
+                  {t('benefits.title2')}
                 </span>
               </h2>
               <p className="text-muted-foreground mb-8">
-                Economize horas de trabalho manual. Foque no que realmente importa: a análise estratégica.
+                {t('benefits.subtitle')}
               </p>
               
               <div className="space-y-4">
-                {[
-                  'Elimina erros de fórmulas no Excel',
-                  'Estrutura DRE automaticamente',
-                  'Fórmulas prontas e auditáveis',
-                  'Exportação instantânea',
-                  'Interface intuitiva e moderna'
-                ].map((benefit, i) => (
+                {benefits.map((benefitKey, i) => (
                   <div key={i} className="flex items-center gap-3 animate-fade-in" style={{ animationDelay: `${0.1 * i}s` }}>
                     <div className="w-6 h-6 rounded-full bg-green-500/10 flex items-center justify-center">
                       <CheckCircle2 className="w-4 h-4 text-green-500" />
                     </div>
-                    <span className="text-foreground">{benefit}</span>
+                    <span className="text-foreground">{t(benefitKey)}</span>
                   </div>
                 ))}
               </div>
@@ -284,7 +282,7 @@ const Landing = () => {
               <div className="mt-10">
                 <Link to="/app">
                   <Button size="lg" className="bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-lg shadow-primary/25">
-                    Começar Gratuitamente
+                    {t('benefits.startFree')}
                     <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </Link>
@@ -346,16 +344,15 @@ const Landing = () => {
             <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzRjMC0yIDItNCAyLTRzLTItMi00LTJjLTIuMjEgMC00IDEuNzktNCA0czEuNzkgNCA0IDRjMiAwIDItMiAyLTJ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-20" />
             <div className="relative">
               <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                Pronto para automatizar seu Valuation?
+                {t('cta.title')}
               </h2>
               <p className="text-white/80 mb-8 max-w-xl mx-auto">
-                Comece agora mesmo. Sem cadastro, sem pagamento. 
-                Importe sua DRE e gere projeções em minutos.
+                {t('cta.subtitle')}
               </p>
               <Link to="/app">
-                <Button size="lg" variant="secondary" className="bg-white text-primary hover:bg-white/90 shadow-xl">
-                  Começar Agora — É Grátis
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                <Button size="xl" variant="secondary" className="bg-white text-primary hover:bg-white/90 shadow-xl">
+                  {t('cta.button')}
+                  <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               </Link>
             </div>
@@ -366,16 +363,46 @@ const Landing = () => {
       {/* Footer */}
       <footer className="py-12 px-6 border-t border-border">
         <div className="container mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-white" />
+          <div className="grid md:grid-cols-4 gap-8">
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xl font-bold text-foreground">Constance</span>
               </div>
-              <span className="font-semibold text-foreground">Constance (M&A AI)</span>
+              <p className="text-muted-foreground max-w-sm">
+                {t('footer.desc')}
+              </p>
             </div>
+            
+            <div>
+              <h4 className="font-semibold text-foreground mb-4">{t('footer.product')}</h4>
+              <ul className="space-y-2">
+                <li><a href="#features" className="text-muted-foreground hover:text-foreground transition-colors">{t('nav.features')}</a></li>
+                <li><a href="#how-it-works" className="text-muted-foreground hover:text-foreground transition-colors">{t('nav.howItWorks')}</a></li>
+                <li><a href="#benefits" className="text-muted-foreground hover:text-foreground transition-colors">{t('nav.benefits')}</a></li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold text-foreground mb-4">{t('footer.company')}</h4>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.about')}</a></li>
+                <li><a href="#" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.contact')}</a></li>
+                <li><a href="#" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.privacy')}</a></li>
+              </ul>
+            </div>
+          </div>
+          
+          <div className="mt-12 pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-muted-foreground">
-              © 2025 Constance. Projeções financeiras automatizadas.
+              © 2024 Constance. {t('footer.rights')}
             </p>
+            <div className="flex items-center gap-4">
+              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors text-sm">{t('footer.privacy')}</a>
+              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors text-sm">{t('footer.terms')}</a>
+            </div>
           </div>
         </div>
       </footer>
