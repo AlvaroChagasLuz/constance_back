@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
 import constanceLogo from '@/assets/constance-logo.png';
+import constanceIcon from '@/assets/constance-icon.png';
 import { 
   TrendingUp, 
   Upload, 
@@ -70,9 +71,7 @@ const Landing = () => {
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25">
-                <TrendingUp className="w-5 h-5 text-white" />
-              </div>
+              <img src={constanceIcon} alt="Constance AI" className="w-10 h-10 rounded-xl shadow-lg shadow-primary/25" />
               <img src={constanceLogo} alt="Constance AI" className="h-6" />
             </div>
             <div className="hidden md:flex items-center gap-8">
@@ -365,9 +364,7 @@ const Landing = () => {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-white" />
-                </div>
+                <img src={constanceIcon} alt="Constance AI" className="w-10 h-10 rounded-xl" />
                 <img src={constanceLogo} alt="Constance AI" className="h-6" />
               </div>
               <p className="text-muted-foreground max-w-sm">
