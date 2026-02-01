@@ -24,13 +24,13 @@
     --muted: 220 14% 96%;
     --muted-foreground: 220 9% 46%;
 
-    --accent: 160 84% 39%;
+    --accent: 210 90% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 160 84% 39%;
+    --success: 145 70% 40%;
     --success-foreground: 0 0% 100%;
 
     --warning: 38 92% 50%;
@@ -43,7 +43,7 @@
     --radius: 0.5rem;
 
     /* Finance-specific */
-    --positive: 160 84% 39%;
+    --positive: 145 70% 40%;
     --negative: 0 72% 51%;
     --neutral: 220 9% 46%;
 
@@ -55,14 +55,14 @@
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(222, 47%, 20%) 0%, hsl(222, 47%, 30%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(160, 84%, 39%) 0%, hsl(160, 84%, 45%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(210, 90%, 55%) 0%, hsl(210, 90%, 65%) 100%);
     --gradient-surface: linear-gradient(180deg, hsl(0, 0%, 100%) 0%, hsl(220, 20%, 98%) 100%);
 
     /* Shadows */
     --shadow-sm: 0 1px 2px 0 hsl(222 47% 11% / 0.05);
     --shadow-md: 0 4px 6px -1px hsl(222 47% 11% / 0.1), 0 2px 4px -2px hsl(222 47% 11% / 0.1);
     --shadow-lg: 0 10px 15px -3px hsl(222 47% 11% / 0.1), 0 4px 6px -4px hsl(222 47% 11% / 0.1);
-    --shadow-glow: 0 0 20px hsl(160, 84%, 39%, 0.2);
+    --shadow-glow: 0 0 20px hsl(210, 90%, 55%, 0.2);
 
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
@@ -93,7 +93,7 @@
     --muted: 222 47% 15%;
     --muted-foreground: 215 20% 65%;
 
-    --accent: 160 84% 45%;
+    --accent: 210 90% 60%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62% 50%;
@@ -103,7 +103,7 @@
     --input: 222 47% 20%;
     --ring: 212.7 26.8% 83.9%;
 
-    --positive: 160 84% 45%;
+    --positive: 145 70% 45%;
     --negative: 0 72% 60%;
 
     --table-header: 222 47% 15%;
