@@ -72,7 +72,7 @@ const Landing = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src={constanceIcon} alt="Constance AI" className="w-10 h-10 rounded-xl shadow-lg shadow-primary/25" />
-              <img src={constanceLogo} alt="Constance AI" className="h-6" />
+              <img src={constanceLogo} alt="Constance AI" className="h-[1.65rem]" />
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -365,7 +365,7 @@ const Landing = () => {
             <div className="md:col-span-2">
               <div className="flex items-center gap-3 mb-4">
                 <img src={constanceIcon} alt="Constance AI" className="w-10 h-10 rounded-xl" />
-                <img src={constanceLogo} alt="Constance AI" className="h-6" />
+                <img src={constanceLogo} alt="Constance AI" className="h-[1.65rem]" />
               </div>
               <p className="text-muted-foreground max-w-sm">
                 {t('footer.desc')}
