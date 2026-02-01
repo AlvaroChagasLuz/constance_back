@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { useLanguage } from '@/contexts/LanguageContext';
+import constanceLogo from '@/assets/constance-logo.png';
 import { 
   TrendingUp, 
   Upload, 
@@ -72,9 +73,7 @@ const Landing = () => {
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25">
                 <TrendingUp className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-                Constance
-              </span>
+              <img src={constanceLogo} alt="Constance AI" className="h-6" />
             </div>
             <div className="hidden md:flex items-center gap-8">
               <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -369,7 +368,7 @@ const Landing = () => {
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold text-foreground">Constance</span>
+                <img src={constanceLogo} alt="Constance AI" className="h-6" />
               </div>
               <p className="text-muted-foreground max-w-sm">
                 {t('footer.desc')}
