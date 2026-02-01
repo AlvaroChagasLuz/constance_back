@@ -8,9 +8,89 @@ import { DREData } from '@/types/dre';
 import { useToast } from '@/hooks/use-toast';
 import ExcelJS from 'exceljs';
 
+// File validation constants
+const MAX_FILE_SIZE_MB = 10;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const MAX_ROWS = 10000;
+const MAX_COLUMNS = 100;
+
+// Valid MIME types for file validation
+const VALID_EXCEL_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-excel', // .xls
+];
+const VALID_CSV_TYPES = [
+  'text/csv',
+  'text/plain', // Some systems report CSV as text/plain
+  'application/csv',
+];
+
 interface DataImportProps {
   onDataImported: (data: DREData) => void;
 }
+
+// Validate file size and type
+const validateFile = (file: File, type: 'excel' | 'csv'): { valid: boolean; error?: string } => {
+  // Check file size
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: `O arquivo excede o limite de ${MAX_FILE_SIZE_MB}MB. Por favor, use um arquivo menor.`,
+    };
+  }
+
+  // Check file size is not zero
+  if (file.size === 0) {
+    return {
+      valid: false,
+      error: 'O arquivo está vazio. Por favor, selecione um arquivo válido.',
+    };
+  }
+
+  // Check MIME type
+  const validTypes = type === 'excel' ? VALID_EXCEL_TYPES : VALID_CSV_TYPES;
+  const fileExtension = file.name.toLowerCase().split('.').pop();
+  const expectedExtensions = type === 'excel' ? ['xlsx', 'xls'] : ['csv'];
+
+  // Validate extension matches expected type
+  if (!fileExtension || !expectedExtensions.includes(fileExtension)) {
+    return {
+      valid: false,
+      error: `Extensão de arquivo inválida. Esperado: ${expectedExtensions.join(', ')}`,
+    };
+  }
+
+  // MIME type check (lenient - some browsers report incorrectly)
+  if (file.type && !validTypes.includes(file.type) && file.type !== 'application/octet-stream') {
+    console.warn(`Unexpected MIME type: ${file.type} for file: ${file.name}`);
+    // Don't fail on MIME type alone, just warn - some systems misreport
+  }
+
+  return { valid: true };
+};
+
+// Validate row and column counts
+const validateDataSize = (rows: string[], maxCols: number = MAX_COLUMNS): { valid: boolean; error?: string } => {
+  if (rows.length > MAX_ROWS) {
+    return {
+      valid: false,
+      error: `O arquivo contém muitas linhas (${rows.length}). Limite máximo: ${MAX_ROWS} linhas.`,
+    };
+  }
+
+  // Check column count in first few rows
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const cols = rows[i].split('\t').length;
+    if (cols > maxCols) {
+      return {
+        valid: false,
+        error: `O arquivo contém muitas colunas (${cols}). Limite máximo: ${maxCols} colunas.`,
+      };
+    }
+  }
+
+  return { valid: true };
+};
 
 export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
   const [pastedText, setPastedText] = useState('');
@@ -22,6 +102,18 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
       toast({
         title: 'Dados vazios',
         description: 'Cole os dados da sua DRE no campo acima.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Validate pasted data size
+    const lines = pastedText.split('\n');
+    const sizeValidation = validateDataSize(lines);
+    if (!sizeValidation.valid) {
+      toast({
+        title: 'Dados muito grandes',
+        description: sizeValidation.error,
         variant: 'destructive',
       });
       return;
@@ -47,6 +139,18 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Validate file before processing
+    const fileValidation = validateFile(file, type);
+    if (!fileValidation.valid) {
+      toast({
+        title: 'Arquivo inválido',
+        description: fileValidation.error,
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -71,6 +175,12 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
           });
           rows.push(cleanValues.join('\t'));
         });
+
+        // Validate data size after parsing
+        const sizeValidation = validateDataSize(rows);
+        if (!sizeValidation.valid) {
+          throw new Error(sizeValidation.error);
+        }
 
         const csvData = rows.join('\n');
         const dreData = parsePastedData(csvData);
@@ -98,6 +208,12 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
           
           return values.join('\t');
         });
+
+        // Validate data size after parsing
+        const sizeValidation = validateDataSize(lines);
+        if (!sizeValidation.valid) {
+          throw new Error(sizeValidation.error);
+        }
         
         const dreData = parsePastedData(lines.join('\n'));
         onDataImported(dreData);
