@@ -118,70 +118,37 @@ function findYearsInData(lines: string[][]): {
   periods: string[];
   dataStartRow: number;
 } {
-  // First, check the header row for years
-  if (lines.length > 0) {
-    const headerCells = lines[0];
-    const headerYearInfo = detectYearPattern(headerCells);
-    
-    if (headerYearInfo.isYearSequence) {
-      // Years are in the header - standard format
-      // Find which column is the account column (first non-year or non-numeric column)
-      let accountColIndex = 0;
-      for (let i = 0; i < headerCells.length; i++) {
-        if (!isYear(headerCells[i].trim()) && isNaN(parseNumber(headerCells[i]))) {
-          accountColIndex = i;
-          break;
-        }
-      }
-      
-      const periods = headerCells
-        .filter((_, idx) => idx !== accountColIndex)
-        .map(p => p.trim())
-        .filter(p => p);
-      
-      return {
-        headerRowIndex: 0,
-        accountColumnIndex: accountColIndex,
-        periods,
-        dataStartRow: 1,
-      };
-    }
-  }
-  
-  // Check if years are in the first column of data rows
-  const firstColumnValues = lines.slice(1).map(row => row[0] || '');
-  const firstColYearInfo = detectYearPattern(firstColumnValues);
-  
-  if (firstColYearInfo.isYearSequence) {
-    // Years are in the first column - transposed format
-    // Transpose the data
-    return {
-      headerRowIndex: -1, // Indicates transposed
-      accountColumnIndex: 0,
-      periods: firstColYearInfo.years,
-      dataStartRow: 0,
-    };
-  }
-  
-  // Check each row for year patterns (in case header is not first row)
+  // Check the first few rows for year patterns
   for (let rowIdx = 0; rowIdx < Math.min(lines.length, 5); rowIdx++) {
     const row = lines[rowIdx];
-    const yearInfo = detectYearPattern(row);
+    if (!row || row.length < 2) continue;
+    
+    // Filter out empty cells and check for years
+    const nonEmptyCells = row.filter(cell => cell && cell.trim() !== '');
+    const yearInfo = detectYearPattern(nonEmptyCells);
     
     if (yearInfo.isYearSequence && yearInfo.years.length >= 2) {
-      // Found years in this row
+      // Found years in this row - determine account column
+      // Account column is typically the first column that's not a year and not empty
       let accountColIndex = 0;
       for (let i = 0; i < row.length; i++) {
-        if (!isYear(row[i].trim()) && isNaN(parseNumber(row[i]))) {
+        const cell = row[i]?.trim() || '';
+        // Account column: not a year, not a number, could be empty (header label)
+        if (!isYear(cell) && (cell === '' || isNaN(parseNumber(cell)) || parseNumber(cell) === 0)) {
           accountColIndex = i;
           break;
         }
       }
       
-      const periods = row
-        .filter((_, idx) => idx !== accountColIndex)
-        .map(p => p.trim())
-        .filter(p => p);
+      // Extract periods: all year-like values from this row, preserving order
+      const periods: string[] = [];
+      for (let i = 0; i < row.length; i++) {
+        if (i === accountColIndex) continue;
+        const cell = row[i]?.trim() || '';
+        if (isYear(cell)) {
+          periods.push(cell);
+        }
+      }
       
       return {
         headerRowIndex: rowIdx,
@@ -192,9 +159,30 @@ function findYearsInData(lines: string[][]): {
     }
   }
   
+  // Check if years are in the first column of data rows (transposed format)
+  const firstColumnValues = lines.slice(1).map(row => row[0] || '');
+  const firstColYearInfo = detectYearPattern(firstColumnValues);
+  
+  if (firstColYearInfo.isYearSequence) {
+    return {
+      headerRowIndex: -1, // Indicates transposed
+      accountColumnIndex: 0,
+      periods: firstColYearInfo.years,
+      dataStartRow: 0,
+    };
+  }
+  
   // Fallback: assume first row is header, first column is accounts
+  // Look for any values that could be periods (years or other period labels)
   const headerCells = lines[0] || [];
-  const periods = headerCells.slice(1).map(p => p.trim()).filter(p => p);
+  const periods: string[] = [];
+  
+  for (let i = 1; i < headerCells.length; i++) {
+    const cell = headerCells[i]?.trim();
+    if (cell) {
+      periods.push(cell);
+    }
+  }
   
   return {
     headerRowIndex: 0,
