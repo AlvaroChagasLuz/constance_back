@@ -86,11 +86,13 @@ const Landing = () => {
               </a>
             </div>
             <div className="flex items-center gap-4">
-              <LanguageToggle />
+              <div className="hidden md:block">
+                <LanguageToggle />
+              </div>
               <Link to="/signin" target="_blank" rel="noopener noreferrer" className="font-bold text-foreground hover:text-primary transition-colors">
                 Sign In
               </Link>
-              <Link to="/app">
+              <Link to="/app" className="hidden md:block">
                 <Button className="min-w-[160px] justify-center whitespace-nowrap bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25">
                   {t('nav.startNow')}
                   <ArrowRight className="w-4 h-4 ml-2" />
