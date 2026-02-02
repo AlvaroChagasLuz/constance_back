@@ -87,7 +87,7 @@ const Landing = () => {
             </div>
             <div className="flex items-center gap-4">
               <LanguageToggle />
-              <Link to="/app" className="font-bold text-foreground hover:text-primary transition-colors">
+              <Link to="/signin" className="font-bold text-foreground hover:text-primary transition-colors">
                 Sign In
               </Link>
               <Link to="/app">
