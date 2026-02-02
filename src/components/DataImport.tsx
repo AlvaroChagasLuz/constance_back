@@ -1,12 +1,10 @@
 import React, { useCallback, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FileSpreadsheet, ClipboardPaste, FileText, Loader2 } from 'lucide-react';
-import { parsePastedData, SAMPLE_DRE } from '@/utils/dreParser';
+import { FileSpreadsheet, FileText, Loader2 } from 'lucide-react';
+import { parsePastedData } from '@/utils/dreParser';
 import { DREData } from '@/types/dre';
 import { useToast } from '@/hooks/use-toast';
 import ExcelJS from 'exceljs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // File validation constants
 const MAX_FILE_SIZE_MB = 10;
@@ -93,47 +91,8 @@ const validateDataSize = (rows: string[], maxCols: number = MAX_COLUMNS): { vali
 };
 
 export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
-  const [pastedText, setPastedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-
-  const handlePaste = useCallback(() => {
-    if (!pastedText.trim()) {
-      toast({
-        title: 'Dados vazios',
-        description: 'Cole os dados da sua DRE no campo acima.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    // Validate pasted data size
-    const lines = pastedText.split('\n');
-    const sizeValidation = validateDataSize(lines);
-    if (!sizeValidation.valid) {
-      toast({
-        title: 'Dados muito grandes',
-        description: sizeValidation.error,
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    try {
-      const data = parsePastedData(pastedText);
-      onDataImported(data);
-      toast({
-        title: 'DRE importada com sucesso!',
-        description: `${data.rows.length} linhas e ${data.periods.length} períodos identificados.`,
-      });
-    } catch (error) {
-      toast({
-        title: 'Erro ao importar',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
-    }
-  }, [pastedText, onDataImported, toast]);
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>, type: 'excel' | 'csv') => {
     const file = event.target.files?.[0];
@@ -236,32 +195,10 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
     }
   }, [onDataImported, toast]);
 
-  const loadSample = useCallback(() => {
-    try {
-      const data = parsePastedData(SAMPLE_DRE);
-      onDataImported(data);
-      setPastedText(SAMPLE_DRE);
-      toast({
-        title: 'Exemplo carregado!',
-        description: 'Uma DRE de exemplo foi carregada para demonstração.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Erro ao carregar exemplo',
-        description: 'Não foi possível carregar os dados de exemplo.',
-        variant: 'destructive',
-      });
-    }
-  }, [onDataImported, toast]);
-
   return (
     <div className="space-y-4 animate-slide-up">
-      <Tabs defaultValue="paste" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-secondary">
-          <TabsTrigger value="paste" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <ClipboardPaste className="w-4 h-4" />
-            Colar
-          </TabsTrigger>
+      <Tabs defaultValue="excel" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 bg-secondary">
           <TabsTrigger value="excel" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
             <FileSpreadsheet className="w-4 h-4" />
             Excel
@@ -271,29 +208,6 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
             CSV
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="paste" className="space-y-4 mt-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Cole sua DRE aqui (copie e cole do Excel)
-            </label>
-            <Textarea
-              value={pastedText}
-              onChange={(e) => setPastedText(e.target.value)}
-              placeholder={`Conta\t2021\t2022\t2023\nReceita Líquida\t1000000\t1200000\t1500000\nCOGS\t-300000\t-360000\t-450000\n...`}
-              className="min-h-[160px] font-mono text-sm bg-background border-input resize-none"
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handlePaste} className="flex-1 bg-primary hover:bg-primary/90">
-              <Upload className="w-4 h-4 mr-2" />
-              Importar Dados
-            </Button>
-            <Button variant="outline" onClick={loadSample} className="border-accent text-accent hover:bg-accent hover:text-accent-foreground">
-              Carregar Exemplo
-            </Button>
-          </div>
-        </TabsContent>
 
         <TabsContent value="excel" className="mt-4">
           <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-accent transition-colors">
