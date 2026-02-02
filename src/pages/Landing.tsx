@@ -384,9 +384,9 @@ const Landing = () => {
             <div>
               <h4 className="font-semibold text-foreground mb-4">{t('footer.company')}</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.about')}</a></li>
-                <li><a href="#" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.contact')}</a></li>
-                <li><a href="#" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.privacy')}</a></li>
+                <li><Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.about')}</Link></li>
+                <li><Link to="/contact" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.contact')}</Link></li>
+                <li><Link to="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">{t('footer.privacy')}</Link></li>
               </ul>
             </div>
           </div>
@@ -396,7 +396,7 @@ const Landing = () => {
               © 2024 Constance. {t('footer.rights')}
             </p>
             <div className="flex items-center gap-4">
-              <a href="#" className="text-muted-foreground hover:text-foreground transition-colors text-sm">{t('footer.privacy')}</a>
+              <Link to="/privacy" className="text-muted-foreground hover:text-foreground transition-colors text-sm">{t('footer.privacy')}</Link>
               <a href="#" className="text-muted-foreground hover:text-foreground transition-colors text-sm">{t('footer.terms')}</a>
             </div>
           </div>
