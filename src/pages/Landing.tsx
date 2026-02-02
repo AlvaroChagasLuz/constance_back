@@ -88,7 +88,7 @@ const Landing = () => {
             <div className="flex items-center gap-4">
               <LanguageToggle />
               <Link to="/app">
-                <Button className="bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25">
+                <Button className="min-w-[160px] justify-center whitespace-nowrap bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25">
                   {t('nav.startNow')}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
