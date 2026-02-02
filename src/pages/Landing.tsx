@@ -87,6 +87,9 @@ const Landing = () => {
             </div>
             <div className="flex items-center gap-4">
               <LanguageToggle />
+              <Link to="/app" className="font-bold text-foreground hover:text-primary transition-colors">
+                Sign In
+              </Link>
               <Link to="/app">
                 <Button className="min-w-[160px] justify-center whitespace-nowrap bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25">
                   {t('nav.startNow')}
