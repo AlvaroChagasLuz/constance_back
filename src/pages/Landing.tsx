@@ -75,13 +75,13 @@ const Landing = () => {
               <img src={constanceLogo} alt="Constance AI" className="h-[1.65rem]" />
             </div>
             <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#features" className="text-sm text-muted-foreground hover:text-foreground transition-colors min-w-[70px] text-center">
                 {t('nav.features')}
               </a>
-              <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#how-it-works" className="text-sm text-muted-foreground hover:text-foreground transition-colors min-w-[110px] text-center">
                 {t('nav.howItWorks')}
               </a>
-              <a href="#benefits" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <a href="#benefits" className="text-sm text-muted-foreground hover:text-foreground transition-colors min-w-[75px] text-center">
                 {t('nav.benefits')}
               </a>
             </div>
