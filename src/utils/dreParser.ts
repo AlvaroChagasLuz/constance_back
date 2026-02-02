@@ -193,7 +193,12 @@ function findYearsInData(lines: string[][]): {
 }
 
 export function parsePastedData(text: string): DREData {
-  const lines = text.trim().split('\n').filter(line => line.trim());
+  // IMPORTANT: do not trimStart() here.
+  // Some Excel exports (and our ExcelJS->TSV conversion) may produce a header row
+  // that starts with a tab when the first cell is blank (e.g. "\t2023\t2024...").
+  // trim() would remove that leading tab and shift all columns left.
+  const normalized = text.replace(/\r\n/g, '\n').trimEnd();
+  const lines = normalized.split('\n').filter(line => line.trim().length > 0);
   
   if (lines.length < 2) {
     throw new Error('Dados insuficientes. Certifique-se de colar pelo menos uma linha de cabeçalho e uma linha de dados.');

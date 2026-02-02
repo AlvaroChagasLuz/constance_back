@@ -117,23 +117,35 @@ export const DataImport: React.FC<DataImportProps> = ({ onDataImported }) => {
         const arrayBuffer = await file.arrayBuffer();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(arrayBuffer);
-        
-        const worksheet = workbook.worksheets[0];
+
+        // Pick the first worksheet that actually contains data.
+        const worksheet =
+          workbook.worksheets.find((ws) => (ws.actualRowCount || ws.rowCount || 0) > 0 && (ws.actualColumnCount || ws.columnCount || 0) > 1) ||
+          workbook.worksheets[0];
         if (!worksheet) {
           throw new Error('Nenhuma planilha encontrada no arquivo');
         }
 
         // Convert worksheet to tab-separated string
         const rows: string[] = [];
-        worksheet.eachRow((row) => {
-          const values = row.values as (string | number | null | undefined)[];
-          // ExcelJS row.values is 1-indexed, first element is undefined
-          const cleanValues = values.slice(1).map(v => {
-            if (v === null || v === undefined) return '';
-            return String(v);
-          });
+        const maxCols = worksheet.actualColumnCount || worksheet.columnCount || 0;
+
+        worksheet.eachRow({ includeEmpty: true }, (row) => {
+          const cleanValues: string[] = [];
+          for (let col = 1; col <= maxCols; col++) {
+            const cell = row.getCell(col);
+            // Use cell.text to support rich text / formatted cells / formulas.
+            cleanValues.push((cell?.text ?? '').toString());
+          }
+
+          // Skip fully empty rows
+          if (cleanValues.every((v) => !v || v.trim() === '')) return;
           rows.push(cleanValues.join('\t'));
         });
+
+        if (rows.length < 2) {
+          throw new Error('Dados insuficientes na planilha. Verifique se há cabeçalho e ao menos uma linha de dados.');
+        }
 
         // Validate data size after parsing
         const sizeValidation = validateDataSize(rows);
