@@ -76,32 +76,32 @@ const Index = () => {
     return result;
   };
 
-  // Spreadsheet header component
-  const SpreadsheetHeader: React.FC<{ columns: number }> = ({ columns }) => (
+  // Spreadsheet header component (with gridlines)
+  const SpreadsheetHeader: React.FC<{ columns: number; showGrid?: boolean }> = ({ columns, showGrid = true }) => (
     <div
-      className="grid border-b border-border bg-muted sticky top-0 z-10"
+      className={`grid ${showGrid ? 'border-b border-border' : ''} bg-muted sticky top-0 z-10`}
       style={{ gridTemplateColumns: `40px repeat(${columns}, minmax(100px, 1fr))` }}
     >
-      <div className="border-r border-border px-2 py-1.5 text-xs font-medium text-muted-foreground text-center"></div>
+      <div className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 text-xs font-medium text-muted-foreground text-center`}></div>
       {Array.from({ length: columns }, (_, i) => (
-        <div key={i} className="border-r border-border px-2 py-1.5 text-xs font-medium text-muted-foreground text-center">
+        <div key={i} className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 text-xs font-medium text-muted-foreground text-center`}>
           {getColumnLetter(i)}
         </div>
       ))}
     </div>
   );
 
-  // Empty spreadsheet row
-  const EmptyRow: React.FC<{ rowNumber: number; columns: number }> = ({ rowNumber, columns }) => (
+  // Empty spreadsheet row (with gridlines)
+  const EmptyRow: React.FC<{ rowNumber: number; columns: number; showGrid?: boolean }> = ({ rowNumber, columns, showGrid = true }) => (
     <div
-      className="grid border-b border-border"
+      className={`grid ${showGrid ? 'border-b border-border' : ''}`}
       style={{ gridTemplateColumns: `40px repeat(${columns}, minmax(100px, 1fr))` }}
     >
-      <div className="border-r border-border px-2 py-1.5 text-xs font-medium text-muted-foreground text-center bg-muted min-h-[32px] flex items-center justify-center">
+      <div className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 text-xs font-medium text-muted-foreground text-center bg-muted min-h-[32px] flex items-center justify-center`}>
         {rowNumber}
       </div>
       {Array.from({ length: columns }, (_, i) => (
-        <div key={i} className="border-r border-border px-2 py-1.5 min-h-[32px] bg-background"></div>
+        <div key={i} className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 min-h-[32px] bg-background`}></div>
       ))}
     </div>
   );
@@ -149,29 +149,13 @@ const Index = () => {
             )}
           </div>
 
-          {/* Spreadsheet content */}
-          <div className="flex-1 overflow-auto border-l border-t border-border">
+          {/* Content without gridlines */}
+          <div className="flex-1 overflow-auto">
             {dreData ? (
               <DRETable dreData={dreData} onUpdateRow={handleUpdateRow} />
             ) : (
-              <div className="h-full flex flex-col">
-                <SpreadsheetHeader columns={5} />
-                {/* First few rows with import prompt */}
-                <div
-                  className="grid border-b border-border"
-                  style={{ gridTemplateColumns: `40px repeat(5, minmax(100px, 1fr))` }}
-                >
-                  <div className="border-r border-border px-2 py-1.5 text-xs font-medium text-muted-foreground text-center bg-muted min-h-[32px] flex items-center justify-center">
-                    1
-                  </div>
-                  <div className="col-span-5 border-r border-border bg-background">
-                    <DataImport onDataImported={handleDataImported} />
-                  </div>
-                </div>
-                {/* Empty rows */}
-                {Array.from({ length: 20 }, (_, i) => (
-                  <EmptyRow key={i + 2} rowNumber={i + 2} columns={5} />
-                ))}
+              <div className="h-full flex flex-col p-4">
+                <DataImport onDataImported={handleDataImported} />
               </div>
             )}
           </div>
