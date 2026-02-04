@@ -186,14 +186,6 @@ const Index = () => {
               <VirtualizedSpreadsheet
                 totalRows={1000}
                 totalColumns={100}
-                emptyMessage={
-                  <div className="text-center p-4 bg-background/90 rounded-lg shadow-sm">
-                    <Settings2 className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Importe sua DRE para configurar as projeções
-                    </p>
-                  </div>
-                }
               />
             )}
           </div>
