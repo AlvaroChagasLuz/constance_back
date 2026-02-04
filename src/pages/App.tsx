@@ -4,6 +4,7 @@ import { DREData, ProjectionPremises, DEFAULT_PREMISES } from '@/types/dre';
 import { DRETable } from '@/components/DRETable';
 import { DataImport } from '@/components/DataImport';
 import { ProjectionWizard } from '@/components/ProjectionWizard';
+import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { generateExcel } from '@/utils/excelExporter';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
@@ -182,30 +183,18 @@ const Index = () => {
                 isExporting={isExporting}
               />
             ) : (
-              <div className="h-full flex flex-col">
-                <SpreadsheetHeader columns={4} />
-                {/* Info row */}
-                <div
-                  className="grid border-b border-border"
-                  style={{ gridTemplateColumns: `40px repeat(4, minmax(100px, 1fr))` }}
-                >
-                  <div className="border-r border-border px-2 py-1.5 text-xs font-medium text-muted-foreground text-center bg-muted min-h-[32px] flex items-center justify-center">
-                    1
+              <VirtualizedSpreadsheet
+                totalRows={1000}
+                totalColumns={100}
+                emptyMessage={
+                  <div className="text-center p-4 bg-background/90 rounded-lg shadow-sm">
+                    <Settings2 className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">
+                      Importe sua DRE para configurar as projeções
+                    </p>
                   </div>
-                  <div className="col-span-4 border-r border-border px-3 py-4 bg-background flex items-center justify-center">
-                    <div className="text-center">
-                      <Settings2 className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Importe sua DRE para configurar as projeções
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Empty rows */}
-                {Array.from({ length: 15 }, (_, i) => (
-                  <EmptyRow key={i + 2} rowNumber={i + 2} columns={4} />
-                ))}
-              </div>
+                }
+              />
             )}
           </div>
         </div>
