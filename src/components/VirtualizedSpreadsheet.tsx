@@ -1,5 +1,11 @@
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Grid, GridImperativeAPI } from 'react-window';
+
+export interface SpreadsheetData {
+  values: (string | number | null)[][];
+  rowCount: number;
+  colCount: number;
+}
 
 interface VirtualizedSpreadsheetProps {
   totalRows?: number;
@@ -8,6 +14,7 @@ interface VirtualizedSpreadsheetProps {
   columnWidth?: number;
   rowNumberWidth?: number;
   headerHeight?: number;
+  data?: SpreadsheetData | null;
   emptyMessage?: React.ReactNode;
 }
 
@@ -22,23 +29,32 @@ const getColumnLetter = (index: number): string => {
   return result;
 };
 
-// Empty cell props type
-type EmptyCellProps = Record<string, never>;
-
 // Cell component for the grid
 const Cell = ({ 
-  style 
+  style,
+  rowIndex,
+  columnIndex,
+  data,
 }: {
   columnIndex: number;
   rowIndex: number;
   style: React.CSSProperties;
   ariaAttributes: object;
-}) => (
-  <div
-    style={style}
-    className="border-r border-b border-border bg-background"
-  />
-);
+  data: SpreadsheetData | null;
+}) => {
+  const cellValue = data?.values?.[rowIndex]?.[columnIndex];
+  const displayValue = cellValue != null ? String(cellValue) : '';
+  
+  return (
+    <div
+      style={style}
+      className="border-r border-b border-border bg-background px-2 flex items-center text-xs overflow-hidden"
+      title={displayValue}
+    >
+      <span className="truncate">{displayValue}</span>
+    </div>
+  );
+};
 
 export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   totalRows = 1000,
@@ -47,12 +63,17 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   columnWidth = 100,
   rowNumberWidth = 40,
   headerHeight = 32,
+  data = null,
   emptyMessage,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<GridImperativeAPI>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [scrollPosition, setScrollPosition] = useState({ left: 0, top: 0 });
+
+  // Calculate actual grid dimensions based on data or defaults
+  const actualRows = data ? Math.max(data.rowCount, 20) : totalRows;
+  const actualColumns = data ? Math.max(data.colCount, 10) : totalColumns;
 
   // Update container size on resize
   useEffect(() => {
@@ -96,8 +117,8 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   );
   
   const visibleRowEnd = useMemo(() => 
-    Math.min(totalRows - 1, Math.ceil((scrollPosition.top + containerSize.height - headerHeight) / rowHeight) + 5),
-    [scrollPosition.top, containerSize.height, headerHeight, rowHeight, totalRows]
+    Math.min(actualRows - 1, Math.ceil((scrollPosition.top + containerSize.height - headerHeight) / rowHeight) + 5),
+    [scrollPosition.top, containerSize.height, headerHeight, rowHeight, actualRows]
   );
 
   const visibleColStart = useMemo(() => 
@@ -106,8 +127,8 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   );
   
   const visibleColEnd = useMemo(() => 
-    Math.min(totalColumns - 1, Math.ceil((scrollPosition.left + containerSize.width - rowNumberWidth) / columnWidth) + 5),
-    [scrollPosition.left, containerSize.width, rowNumberWidth, columnWidth, totalColumns]
+    Math.min(actualColumns - 1, Math.ceil((scrollPosition.left + containerSize.width - rowNumberWidth) / columnWidth) + 5),
+    [scrollPosition.left, containerSize.width, rowNumberWidth, columnWidth, actualColumns]
   );
 
   const gridWidth = containerSize.width - rowNumberWidth;
@@ -155,6 +176,9 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
     return numbers;
   }, [visibleRowStart, visibleRowEnd, rowHeight, rowNumberWidth]);
 
+  // Memoized cell props
+  const cellProps = useMemo(() => ({ data }), [data]);
+
   return (
     <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-background">
       {containerSize.width > 0 && containerSize.height > 0 && (
@@ -177,7 +201,7 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
             <div
               style={{
                 position: 'relative',
-                width: totalColumns * columnWidth,
+                width: actualColumns * columnWidth,
                 height: headerHeight,
                 transform: `translateX(-${scrollPosition.left}px)`,
               }}
@@ -199,7 +223,7 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
               style={{
                 position: 'relative',
                 width: rowNumberWidth,
-                height: totalRows * rowHeight,
+                height: actualRows * rowHeight,
                 transform: `translateY(-${scrollPosition.top}px)`,
               }}
             >
@@ -217,13 +241,13 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
               height: gridHeight,
             }}
           >
-            <Grid<EmptyCellProps>
+            <Grid<{ data: SpreadsheetData | null }>
               gridRef={gridRef}
               cellComponent={Cell}
-              cellProps={{} as EmptyCellProps}
-              columnCount={totalColumns}
+              cellProps={cellProps}
+              columnCount={actualColumns}
               columnWidth={columnWidth}
-              rowCount={totalRows}
+              rowCount={actualRows}
               rowHeight={rowHeight}
               overscanCount={5}
               style={{ width: gridWidth, height: gridHeight }}
