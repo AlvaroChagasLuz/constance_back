@@ -4,17 +4,36 @@ import { DREData, ProjectionPremises, DEFAULT_PREMISES } from '@/types/dre';
 import { DRETable } from '@/components/DRETable';
 import { DataImport } from '@/components/DataImport';
 import { ProjectionWizard } from '@/components/ProjectionWizard';
-import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
+import { VirtualizedSpreadsheet, SpreadsheetData } from '@/components/VirtualizedSpreadsheet';
+import { ExcelUpload } from '@/components/ExcelUpload';
 import { generateExcel } from '@/utils/excelExporter';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
+import { TrendingUp, Table2, Settings2, ArrowLeft, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
   const [dreData, setDreData] = useState<DREData | null>(null);
   const [premises, setPremises] = useState<ProjectionPremises>(DEFAULT_PREMISES);
   const [isExporting, setIsExporting] = useState(false);
+  const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
+  const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const { toast } = useToast();
+
+  const handleCopyToRight = useCallback(() => {
+    if (leftSpreadsheetData) {
+      // Deep copy the data
+      const copiedData: SpreadsheetData = {
+        values: leftSpreadsheetData.values.map(row => [...row]),
+        rowCount: leftSpreadsheetData.rowCount,
+        colCount: leftSpreadsheetData.colCount,
+      };
+      setRightSpreadsheetData(copiedData);
+      toast({
+        title: 'Dados copiados!',
+        description: `${copiedData.rowCount} linhas × ${copiedData.colCount} colunas copiadas para a direita.`,
+      });
+    }
+  }, [leftSpreadsheetData, toast]);
 
   const handleDataImported = useCallback((data: DREData) => {
     setDreData(data);
@@ -132,62 +151,58 @@ const Index = () => {
 
       {/* Main spreadsheet area */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Left Panel - DRE Table as Spreadsheet */}
+        {/* Left Panel - Excel Import Spreadsheet */}
         <div className="w-[40%] border-r border-border flex flex-col">
-          {/* Sheet tab */}
+          {/* Sheet tab with Copy button */}
           <div className="flex items-center bg-muted/30 border-b border-border">
             <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
               <Table2 className="w-3.5 h-3.5 text-primary" />
-              DRE Importada
+              Dados Importados
             </div>
-            {dreData && (
-              <button
-                onClick={() => setDreData(null)}
-                className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+            {leftSpreadsheetData && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCopyToRight}
+                className="h-7 text-xs ml-2"
               >
-                + Nova DRE
-              </button>
+                <Copy className="w-3.5 h-3.5 mr-1" />
+                Copiar para Direita
+              </Button>
             )}
           </div>
 
-          {/* Content without gridlines */}
-          <div className="flex-1 overflow-auto">
-            {dreData ? (
-              <DRETable dreData={dreData} onUpdateRow={handleUpdateRow} />
-            ) : (
-              <div className="h-full flex flex-col p-4">
-                <DataImport onDataImported={handleDataImported} />
-              </div>
-            )}
+          {/* Excel Upload / Spreadsheet */}
+          <div className="flex-1 overflow-hidden">
+            <ExcelUpload 
+              data={leftSpreadsheetData} 
+              onDataLoaded={setLeftSpreadsheetData} 
+            />
           </div>
         </div>
 
-        {/* Right Panel - Projection Wizard as Spreadsheet */}
+        {/* Right Panel - Copied Data Spreadsheet */}
         <div className="w-[60%] flex flex-col">
           {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
             <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
               <Settings2 className="w-3.5 h-3.5 text-accent" />
-              Configurações de Projeção
+              Dados Copiados
             </div>
+            {rightSpreadsheetData && (
+              <span className="text-xs text-muted-foreground ml-2">
+                {rightSpreadsheetData.rowCount} linhas × {rightSpreadsheetData.colCount} colunas
+              </span>
+            )}
           </div>
 
           {/* Spreadsheet content */}
           <div className="flex-1 overflow-hidden border-t border-border">
-            {dreData ? (
-              <ProjectionWizard
-                premises={premises}
-                onPremisesChange={setPremises}
-                baseYear={dreData.periods[dreData.periods.length - 1] || ''}
-                onExport={handleExport}
-                isExporting={isExporting}
-              />
-            ) : (
-              <VirtualizedSpreadsheet
-                totalRows={1000}
-                totalColumns={100}
-              />
-            )}
+            <VirtualizedSpreadsheet
+              data={rightSpreadsheetData}
+              totalRows={1000}
+              totalColumns={100}
+            />
           </div>
         </div>
       </main>
@@ -195,7 +210,11 @@ const Index = () => {
       {/* Footer formula bar style */}
       <footer className="border-t border-border bg-muted/30 px-3 py-1 flex items-center text-xs text-muted-foreground">
         <span className="px-2 py-0.5 bg-muted rounded mr-2">fx</span>
-        <span>{dreData ? `Base: ${premises.baseYear || dreData.periods[dreData.periods.length - 1]}` : 'Aguardando importação de dados...'}</span>
+        <span>
+          {leftSpreadsheetData 
+            ? `Importado: ${leftSpreadsheetData.rowCount} × ${leftSpreadsheetData.colCount}` 
+            : 'Aguardando importação de dados...'}
+        </span>
       </footer>
     </div>
   );
