@@ -1,24 +1,30 @@
 import React, { useState } from 'react';
-import { BarChart3, ArrowRight } from 'lucide-react';
+import { BarChart3, TrendingUp, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 
 interface ProjectionAssumptionsProps {
-  onContinue?: (revenueGrowthRate: number) => void;
+  onApply?: (revenueGrowthRate: number) => void;
+  onContinue?: () => void;
+  hasApplied?: boolean;
 }
 
-export const ProjectionAssumptions: React.FC<ProjectionAssumptionsProps> = ({ onContinue }) => {
+export const ProjectionAssumptions: React.FC<ProjectionAssumptionsProps> = ({
+  onApply,
+  onContinue,
+  hasApplied = false,
+}) => {
   const [growthRate, setGrowthRate] = useState<string>('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setGrowthRate(e.target.value);
   };
 
-  const handleContinue = () => {
+  const handleApply = () => {
     const num = parseFloat(growthRate);
     if (!isNaN(num)) {
-      onContinue?.(num);
+      onApply?.(num);
     }
   };
 
@@ -58,7 +64,7 @@ export const ProjectionAssumptions: React.FC<ProjectionAssumptionsProps> = ({ on
               value={growthRate}
               onChange={handleChange}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && isValid) handleContinue();
+                if (e.key === 'Enter' && isValid && !hasApplied) handleApply();
               }}
               className="text-center text-lg font-medium"
             />
@@ -68,14 +74,25 @@ export const ProjectionAssumptions: React.FC<ProjectionAssumptionsProps> = ({ on
           </div>
         </div>
 
-        <Button
-          onClick={handleContinue}
-          disabled={!isValid}
-          className="w-full gap-2"
-        >
-          Continuar
-          <ArrowRight className="w-4 h-4" />
-        </Button>
+        <div className="w-full flex flex-col gap-2">
+          <Button
+            onClick={handleApply}
+            disabled={!isValid || hasApplied}
+            className="w-full gap-2"
+          >
+            <TrendingUp className="w-4 h-4" />
+            Projetar Receita
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onContinue}
+            disabled={!hasApplied}
+            className="w-full gap-2"
+          >
+            Continuar
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
