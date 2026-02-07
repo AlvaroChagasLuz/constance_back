@@ -5,26 +5,20 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 
 interface FinancialModellingPanelProps {
-  onYearsConfirmed?: (years: number) => void;
-  onContinue?: () => void;
-  hasProjected?: boolean;
+  onContinue?: (years: number) => void;
 }
 
-export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = ({
-  onYearsConfirmed,
-  onContinue,
-  hasProjected = false,
-}) => {
+export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = ({ onContinue }) => {
   const [years, setYears] = useState<string>('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setYears(e.target.value);
   };
 
-  const handleProject = () => {
+  const handleContinue = () => {
     const num = parseInt(years, 10);
     if (!isNaN(num) && num > 0 && num <= 30) {
-      onYearsConfirmed?.(num);
+      onContinue?.(num);
     }
   };
 
@@ -58,30 +52,19 @@ export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = (
             value={years}
             onChange={handleChange}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && isValid) handleProject();
+              if (e.key === 'Enter' && isValid) handleContinue();
             }}
             className="text-center text-lg font-medium"
           />
         </div>
-        <div className="w-full flex flex-col gap-3">
-          <Button
-            onClick={handleProject}
-            disabled={!isValid}
-            className="w-full gap-2"
-          >
-            <TrendingUp className="w-4 h-4" />
-            Projetar {isValid ? `${years} ano${parseInt(years) > 1 ? 's' : ''}` : ''}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={onContinue}
-            disabled={!hasProjected}
-            className="w-full gap-2"
-          >
-            Continuar
-            <ArrowRight className="w-4 h-4" />
-          </Button>
-        </div>
+        <Button
+          onClick={handleContinue}
+          disabled={!isValid}
+          className="w-full gap-2"
+        >
+          Continuar
+          <ArrowRight className="w-4 h-4" />
+        </Button>
       </div>
     </div>
   );
