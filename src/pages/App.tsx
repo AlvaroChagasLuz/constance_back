@@ -1,27 +1,26 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { DREData, ProjectionPremises, DEFAULT_PREMISES } from '@/types/dre';
 import type { SpreadsheetData } from '@/types/spreadsheet';
-import { DRETable } from '@/components/DRETable';
-import { DataImport } from '@/components/DataImport';
-import { ProjectionWizard } from '@/components/ProjectionWizard';
 import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
-import { generateExcel } from '@/utils/excelExporter';
+import { ConfirmationBanner } from '@/components/ConfirmationBanner';
+import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
+type AppStep = 'import' | 'confirm' | 'modelling';
+
 const Index = () => {
-  const [dreData, setDreData] = useState<DREData | null>(null);
-  const [premises, setPremises] = useState<ProjectionPremises>(DEFAULT_PREMISES);
-  const [isExporting, setIsExporting] = useState(false);
   const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
+  const [step, setStep] = useState<AppStep>('import');
   const { toast } = useToast();
 
-  // Auto-copy left data to right whenever left changes
+  // Auto-copy left data to right whenever left changes during import step
   useEffect(() => {
+    if (step !== 'import') return;
+
     if (leftSpreadsheetData) {
       const copiedData: SpreadsheetData = {
         values: leftSpreadsheetData.values.map(row => [...row]),
@@ -35,58 +34,29 @@ const Index = () => {
         startCol: leftSpreadsheetData.startCol,
       };
       setRightSpreadsheetData(copiedData);
+      setStep('confirm');
     } else {
       setRightSpreadsheetData(null);
     }
   }, [leftSpreadsheetData]);
 
-  const handleDataImported = useCallback((data: DREData) => {
-    setDreData(data);
-    if (data.periods.length > 0) {
-      setPremises(prev => ({
-        ...prev,
-        baseYear: data.periods[data.periods.length - 1],
-      }));
-    }
+  const handleConfirm = useCallback(() => {
+    setStep('modelling');
+    toast({
+      title: 'Dados confirmados!',
+      description: 'Configure a modelagem financeira no painel esquerdo.',
+    });
+  }, [toast]);
+
+  const handleReject = useCallback(() => {
+    setLeftSpreadsheetData(null);
+    setRightSpreadsheetData(null);
+    setStep('import');
   }, []);
 
-  const handleUpdateRow = useCallback((rowId: string, updates: Partial<{ account: string; values: Record<string, number> }>) => {
-    if (!dreData) return;
-    setDreData({
-      ...dreData,
-      rows: dreData.rows.map(row =>
-        row.id === rowId ? { ...row, ...updates } : row
-      ),
-    });
-  }, [dreData]);
-
-  const handleExport = useCallback(async () => {
-    if (!dreData) {
-      toast({
-        title: 'Nenhuma DRE importada',
-        description: 'Importe uma DRE antes de exportar.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsExporting(true);
-    try {
-      await generateExcel(dreData, premises);
-      toast({
-        title: 'Excel gerado com sucesso!',
-        description: 'O download deve iniciar automaticamente.',
-      });
-    } catch (error) {
-      toast({
-        title: 'Erro ao gerar Excel',
-        description: error instanceof Error ? error.message : 'Erro desconhecido',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsExporting(false);
-    }
-  }, [dreData, premises, toast]);
+  // Left panel tab label
+  const leftTabLabel = step === 'modelling' ? 'Modelagem Financeira' : 'Dados Importados';
+  const LeftTabIcon = step === 'modelling' ? TrendingUp : Table2;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -97,11 +67,6 @@ const Index = () => {
             <TrendingUp className="w-4 h-4 text-primary-foreground" />
           </div>
           <span className="text-sm font-semibold text-foreground">Constance</span>
-          {dreData && (
-            <span className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent font-medium ml-2">
-              {dreData.rows.length} linhas • {dreData.periods.length} períodos
-            </span>
-          )}
         </div>
         <Button variant="ghost" size="sm" asChild className="h-7 text-xs">
           <Link to="/">
@@ -113,26 +78,30 @@ const Index = () => {
 
       {/* Main spreadsheet area */}
       <main className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Excel Import Spreadsheet */}
+        {/* Left Panel */}
         <div className="w-[40%] border-r border-border flex flex-col">
           {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
             <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
-              <Table2 className="w-3.5 h-3.5 text-primary" />
-              Dados Importados
+              <LeftTabIcon className="w-3.5 h-3.5 text-primary" />
+              {leftTabLabel}
             </div>
           </div>
 
-          {/* Excel Upload / Spreadsheet */}
+          {/* Left panel content */}
           <div className="flex-1 overflow-hidden">
-            <ExcelUpload
-              data={leftSpreadsheetData}
-              onDataLoaded={setLeftSpreadsheetData}
-            />
+            {step === 'modelling' ? (
+              <FinancialModellingPanel />
+            ) : (
+              <ExcelUpload
+                data={leftSpreadsheetData}
+                onDataLoaded={setLeftSpreadsheetData}
+              />
+            )}
           </div>
         </div>
 
-        {/* Right Panel - Mirrored Data */}
+        {/* Right Panel */}
         <div className="w-[60%] flex flex-col">
           {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
@@ -148,12 +117,23 @@ const Index = () => {
           </div>
 
           {/* Spreadsheet content */}
-          <div className="flex-1 overflow-hidden border-t border-border">
-            <VirtualizedSpreadsheet
-              data={rightSpreadsheetData}
-              totalRows={1000}
-              totalColumns={100}
-            />
+          <div className="flex-1 overflow-hidden border-t border-border relative">
+            {step === 'confirm' && (
+              <ConfirmationBanner onConfirm={handleConfirm} onReject={handleReject} />
+            )}
+            {rightSpreadsheetData ? (
+              <VirtualizedSpreadsheet
+                data={rightSpreadsheetData}
+                totalRows={1000}
+                totalColumns={100}
+              />
+            ) : (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-sm text-muted-foreground">
+                  Cole seus dados do Excel no painel esquerdo
+                </p>
+              </div>
+            )}
           </div>
         </div>
       </main>
@@ -162,9 +142,11 @@ const Index = () => {
       <footer className="border-t border-border bg-muted/30 px-3 py-1 flex items-center text-xs text-muted-foreground">
         <span className="px-2 py-0.5 bg-muted rounded mr-2">fx</span>
         <span>
-          {leftSpreadsheetData
-            ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
-            : 'Aguardando importação de dados...'}
+          {step === 'modelling'
+            ? 'Dados confirmados — Configure a projeção'
+            : leftSpreadsheetData
+              ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
+              : 'Aguardando importação de dados...'}
         </span>
       </footer>
     </div>
