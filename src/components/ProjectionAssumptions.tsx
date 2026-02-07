@@ -77,11 +77,11 @@ export const ProjectionAssumptions: React.FC<ProjectionAssumptionsProps> = ({
         <div className="w-full flex flex-col gap-2">
           <Button
             onClick={handleApply}
-            disabled={!isValid || hasApplied}
+            disabled={!isValid}
             className="w-full gap-2"
           >
             <TrendingUp className="w-4 h-4" />
-            Projetar Receita
+            {hasApplied ? 'Reprojetar Receita' : 'Projetar Receita'}
           </Button>
           <Button
             variant="outline"
