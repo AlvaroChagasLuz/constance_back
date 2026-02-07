@@ -57,14 +57,25 @@ export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = (
             className="text-center text-lg font-medium"
           />
         </div>
-        <Button
-          onClick={handleConfirm}
-          disabled={!isValid}
-          className="w-full gap-2"
-        >
-          Continuar
-          <ArrowRight className="w-4 h-4" />
-        </Button>
+        <div className="w-full flex flex-col gap-3">
+          <Button
+            onClick={handleConfirm}
+            disabled={!isValid}
+            className="w-full gap-2"
+          >
+            <TrendingUp className="w-4 h-4" />
+            Projetar {isValid ? `${years} ano${parseInt(years) > 1 ? 's' : ''}` : ''}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleConfirm}
+            disabled={!isValid}
+            className="w-full gap-2"
+          >
+            Continuar
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );
