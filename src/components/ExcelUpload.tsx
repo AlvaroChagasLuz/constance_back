@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import { Upload, FileSpreadsheet, Loader2 } from 'lucide-react';
-import { VirtualizedSpreadsheet, SpreadsheetData } from './VirtualizedSpreadsheet';
+import { VirtualizedSpreadsheet } from './VirtualizedSpreadsheet';
 import { Button } from '@/components/ui/button';
+import { parseExcelWithFormatting, parseClipboardHtml } from '@/utils/excelFormatParser';
+import type { SpreadsheetData } from '@/types/spreadsheet';
 
 interface ExcelUploadProps {
   onDataLoaded: (data: SpreadsheetData) => void;
@@ -15,49 +16,11 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
   const [dimensions, setDimensions] = useState<{ rows: number; cols: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const parseExcelFile = useCallback(async (file: File) => {
+  const handleExcelFile = useCallback(async (file: File) => {
     setIsLoading(true);
-    
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-      
-      // Get first sheet
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      
-      // Get range of used cells
-      const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-      const rowCount = range.e.r - range.s.r + 1;
-      const colCount = range.e.c - range.s.c + 1;
-      
-      // Convert to array of arrays
-      const jsonData = XLSX.utils.sheet_to_json<(string | number | null)[]>(worksheet, {
-        header: 1,
-        defval: null,
-      });
-      
-      // Normalize rows to have consistent column count
-      const normalizedData: (string | number | null)[][] = jsonData.map(row => {
-        const normalizedRow = [...row];
-        while (normalizedRow.length < colCount) {
-          normalizedRow.push(null);
-        }
-        return normalizedRow;
-      });
-      
-      // Pad with empty rows if needed
-      while (normalizedData.length < rowCount) {
-        normalizedData.push(Array(colCount).fill(null));
-      }
-      
-      const spreadsheetData: SpreadsheetData = {
-        values: normalizedData,
-        rowCount,
-        colCount,
-      };
-      
-      setDimensions({ rows: rowCount, cols: colCount });
+      const spreadsheetData = await parseExcelWithFormatting(file);
+      setDimensions({ rows: spreadsheetData.rowCount, cols: spreadsheetData.colCount });
       onDataLoaded(spreadsheetData);
     } catch (error) {
       console.error('Error parsing Excel file:', error);
@@ -74,10 +37,10 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
     if (files.length > 0) {
       const file = files[0];
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        parseExcelFile(file);
+        handleExcelFile(file);
       }
     }
-  }, [parseExcelFile]);
+  }, [handleExcelFile]);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -94,19 +57,62 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
     if (files && files.length > 0) {
       const file = files[0];
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        parseExcelFile(file);
+        handleExcelFile(file);
       }
     }
-  }, [parseExcelFile]);
+  }, [handleExcelFile]);
 
   const handleClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
+  // Handle clipboard paste
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const html = e.clipboardData.getData('text/html');
+    if (html) {
+      const parsed = parseClipboardHtml(html);
+      if (parsed) {
+        e.preventDefault();
+        setDimensions({ rows: parsed.rowCount, cols: parsed.colCount });
+        onDataLoaded(parsed);
+        return;
+      }
+    }
+    
+    // Fallback: parse plain text as tab-separated values
+    const text = e.clipboardData.getData('text/plain');
+    if (text) {
+      e.preventDefault();
+      const rows = text.split('\n').filter(r => r.length > 0);
+      const values = rows.map(row => {
+        return row.split('\t').map(cell => {
+          const trimmed = cell.trim();
+          if (trimmed === '') return null;
+          const num = Number(trimmed.replace(/[,\s]/g, ''));
+          return !isNaN(num) && trimmed !== '' ? num : trimmed;
+        });
+      });
+      
+      const maxCols = Math.max(...values.map(r => r.length));
+      const normalized = values.map(row => {
+        while (row.length < maxCols) row.push(null);
+        return row;
+      });
+      
+      const data: SpreadsheetData = {
+        values: normalized,
+        rowCount: normalized.length,
+        colCount: maxCols,
+      };
+      setDimensions({ rows: data.rowCount, cols: data.colCount });
+      onDataLoaded(data);
+    }
+  }, [onDataLoaded]);
+
   // If no data, show upload zone
   if (!data) {
     return (
-      <div className="h-full flex flex-col">
+      <div className="h-full flex flex-col" onPaste={handlePaste} tabIndex={0}>
         <div
           className={`flex-1 flex flex-col items-center justify-center border-2 border-dashed rounded-lg m-4 transition-colors cursor-pointer ${
             isDragOver 
@@ -138,10 +144,10 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium text-foreground">
-                  Arraste um arquivo Excel ou clique para selecionar
+                  Arraste um arquivo Excel, cole dados (Ctrl+V) ou clique para selecionar
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Formatos suportados: .xlsx, .xls
+                  Formatos suportados: .xlsx, .xls ou colar do Excel
                 </p>
               </div>
             </div>
@@ -153,7 +159,7 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
 
   // Show spreadsheet with data
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col" onPaste={handlePaste} tabIndex={0}>
       {/* Dimensions indicator */}
       {dimensions && (
         <div className="px-3 py-2 bg-muted/30 border-b border-border flex items-center gap-2">
