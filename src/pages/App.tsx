@@ -17,6 +17,7 @@ const Index = () => {
   const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
+  const [projectedBaseData, setProjectedBaseData] = useState<SpreadsheetData | null>(null);
   const [originalColCount, setOriginalColCount] = useState<number>(0);
   const [hasAppliedRevenue, setHasAppliedRevenue] = useState(false);
   const [step, setStep] = useState<AppStep>('import');
@@ -59,6 +60,7 @@ const Index = () => {
     setLeftSpreadsheetData(null);
     setRightSpreadsheetData(null);
     setOriginalRightData(null);
+    setProjectedBaseData(null);
     setOriginalColCount(0);
     setHasAppliedRevenue(false);
     setStep('import');
@@ -70,6 +72,7 @@ const Index = () => {
 
     const projected = addProjectionColumns(originalRightData, years);
     setRightSpreadsheetData(projected);
+    setProjectedBaseData(projected);
     setStep('assumptions');
 
     toast({
@@ -80,9 +83,9 @@ const Index = () => {
 
   // Step 5a: "Projetar Receita" — apply growth rate to revenue row
   const handleApplyRevenue = useCallback((revenueGrowthRate: number) => {
-    if (!rightSpreadsheetData) return;
+    if (!projectedBaseData) return;
 
-    const projected = applyRevenueProjection(rightSpreadsheetData, revenueGrowthRate, originalColCount);
+    const projected = applyRevenueProjection(projectedBaseData, revenueGrowthRate, originalColCount);
     setRightSpreadsheetData(projected);
     setHasAppliedRevenue(true);
 
@@ -90,7 +93,7 @@ const Index = () => {
       title: 'Projeção de receita aplicada!',
       description: `Taxa de crescimento: ${revenueGrowthRate}% ao ano`,
     });
-  }, [rightSpreadsheetData, originalColCount, toast]);
+  }, [projectedBaseData, originalColCount, toast]);
 
   // Step 5b: "Continuar" — advance to next workflow step
   const handleAssumptionsContinue = useCallback(() => {
