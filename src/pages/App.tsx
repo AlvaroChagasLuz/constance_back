@@ -6,7 +6,7 @@ import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
-import { addProjectionColumns } from '@/utils/projectionUtils';
+import { addProjectionColumns, applyRevenueProjection } from '@/utils/projectionUtils';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ const Index = () => {
   const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
+  const [originalColCount, setOriginalColCount] = useState<number>(0);
   const [step, setStep] = useState<AppStep>('import');
   const { toast } = useToast();
 
@@ -38,6 +39,7 @@ const Index = () => {
       };
       setRightSpreadsheetData(copiedData);
       setOriginalRightData(copiedData);
+      setOriginalColCount(copiedData.colCount);
       setStep('confirm');
     } else {
       setRightSpreadsheetData(null);
@@ -56,6 +58,7 @@ const Index = () => {
     setLeftSpreadsheetData(null);
     setRightSpreadsheetData(null);
     setOriginalRightData(null);
+    setOriginalColCount(0);
     setStep('import');
   }, []);
 
@@ -75,12 +78,16 @@ const Index = () => {
 
   // Step 5: "Continuar" in assumptions → next workflow step (future)
   const handleAssumptionsContinue = useCallback((revenueGrowthRate: number) => {
+    if (!rightSpreadsheetData) return;
+
+    const projected = applyRevenueProjection(rightSpreadsheetData, revenueGrowthRate, originalColCount);
+    setRightSpreadsheetData(projected);
+
     toast({
-      title: 'Premissas salvas!',
-      description: `Taxa de crescimento de receita: ${revenueGrowthRate}%`,
+      title: 'Projeção de receita aplicada!',
+      description: `Taxa de crescimento: ${revenueGrowthRate}% ao ano`,
     });
-    // Future: advance to next workflow step
-  }, [toast]);
+  }, [rightSpreadsheetData, originalColCount, toast]);
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {
