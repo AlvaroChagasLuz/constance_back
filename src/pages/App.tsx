@@ -18,6 +18,7 @@ const Index = () => {
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
   const [originalColCount, setOriginalColCount] = useState<number>(0);
+  const [hasAppliedRevenue, setHasAppliedRevenue] = useState(false);
   const [step, setStep] = useState<AppStep>('import');
   const { toast } = useToast();
 
@@ -59,6 +60,7 @@ const Index = () => {
     setRightSpreadsheetData(null);
     setOriginalRightData(null);
     setOriginalColCount(0);
+    setHasAppliedRevenue(false);
     setStep('import');
   }, []);
 
@@ -76,18 +78,28 @@ const Index = () => {
     });
   }, [originalRightData, toast]);
 
-  // Step 5: "Continuar" in assumptions → next workflow step (future)
-  const handleAssumptionsContinue = useCallback((revenueGrowthRate: number) => {
+  // Step 5a: "Projetar Receita" — apply growth rate to revenue row
+  const handleApplyRevenue = useCallback((revenueGrowthRate: number) => {
     if (!rightSpreadsheetData) return;
 
     const projected = applyRevenueProjection(rightSpreadsheetData, revenueGrowthRate, originalColCount);
     setRightSpreadsheetData(projected);
+    setHasAppliedRevenue(true);
 
     toast({
       title: 'Projeção de receita aplicada!',
       description: `Taxa de crescimento: ${revenueGrowthRate}% ao ano`,
     });
   }, [rightSpreadsheetData, originalColCount, toast]);
+
+  // Step 5b: "Continuar" — advance to next workflow step
+  const handleAssumptionsContinue = useCallback(() => {
+    // Future: advance to next workflow step (e.g., COGS, SG&A)
+    toast({
+      title: 'Premissas confirmadas!',
+      description: 'Avançando para a próxima etapa.',
+    });
+  }, [toast]);
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {
@@ -109,7 +121,7 @@ const Index = () => {
       case 'modelling':
         return <FinancialModellingPanel onContinue={handleModellingContinue} />;
       case 'assumptions':
-        return <ProjectionAssumptions onContinue={handleAssumptionsContinue} />;
+        return <ProjectionAssumptions onApply={handleApplyRevenue} onContinue={handleAssumptionsContinue} hasApplied={hasAppliedRevenue} />;
       default:
         return (
           <ExcelUpload
