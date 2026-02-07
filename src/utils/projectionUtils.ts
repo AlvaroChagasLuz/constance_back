@@ -113,3 +113,119 @@ export function addProjectionColumns(data: SpreadsheetData, numYears: number): S
     startCol: data.startCol,
   };
 }
+
+/**
+ * Revenue label patterns in priority order.
+ * Each group is tried in order; within a group, any match is accepted.
+ */
+const REVENUE_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['receita bruta', 'gross revenue'], priority: 1 },
+  { labels: ['receita líquida', 'receita liquida', 'net revenue'], priority: 2 },
+  { labels: ['revenue', 'receita'], priority: 3 },
+];
+
+/**
+ * Find the row index that contains the revenue line item.
+ * Searches all rows in the first few columns for matching labels.
+ * Returns the row index or null if not found.
+ */
+export function findRevenueRow(data: SpreadsheetData): number | null {
+  const maxLabelCols = Math.min(5, data.colCount);
+
+  // Collect all candidate matches: { row, priority }
+  const candidates: { row: number; priority: number }[] = [];
+
+  for (let r = 0; r < data.values.length; r++) {
+    const row = data.values[r];
+    if (!row) continue;
+
+    for (let c = 0; c < maxLabelCols; c++) {
+      const val = row[c];
+      if (val == null) continue;
+
+      const cellText = String(val).trim().toLowerCase();
+      if (!cellText) continue;
+
+      for (const pattern of REVENUE_PATTERNS) {
+        if (pattern.labels.some(label => cellText.includes(label))) {
+          candidates.push({ row: r, priority: pattern.priority });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Return the row with the highest priority (lowest number)
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].row;
+}
+
+/**
+ * Detect the number of original (historical) columns by finding the boundary
+ * where the original data ended and projection columns begin.
+ * This is determined by the original colCount stored before projection.
+ */
+function findLastHistoricalValue(data: SpreadsheetData, row: number, originalColCount: number): {
+  value: number;
+  col: number;
+} | null {
+  // Search backwards from the last original column for a numeric value
+  for (let c = originalColCount - 1; c >= 0; c--) {
+    const val = data.values[row]?.[c];
+    if (val == null) continue;
+
+    const num = typeof val === 'number' ? val : parseFloat(String(val).replace(/[,.\s]/g, (m) => m === ',' ? '' : m));
+    if (!isNaN(num) && num !== 0) {
+      return { value: num, col: c };
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply a revenue growth rate to the projection columns of the spreadsheet.
+ * 
+ * @param data - The current spreadsheet data (with projection columns already added)
+ * @param growthRate - The annual growth rate as a percentage (e.g. 10 for 10%)
+ * @param originalColCount - The column count before projection columns were added
+ * @returns A new SpreadsheetData with revenue values filled in
+ */
+export function applyRevenueProjection(
+  data: SpreadsheetData,
+  growthRate: number,
+  originalColCount: number
+): SpreadsheetData {
+  const revenueRow = findRevenueRow(data);
+  if (revenueRow === null) {
+    return data; // No revenue row found, return unchanged
+  }
+
+  const lastHistorical = findLastHistoricalValue(data, revenueRow, originalColCount);
+  if (!lastHistorical) {
+    return data; // No historical revenue value found
+  }
+
+  // Deep clone values
+  const newValues = data.values.map(row => [...row]);
+
+  // Apply growth rate to each projection column
+  const rate = growthRate / 100;
+  let previousValue = lastHistorical.value;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const projectedValue = previousValue * (1 + rate);
+    // Round to 2 decimal places
+    newValues[revenueRow][c] = Math.round(projectedValue * 100) / 100;
+    previousValue = projectedValue;
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
+}
