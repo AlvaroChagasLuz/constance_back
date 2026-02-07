@@ -1,14 +1,15 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { DREData, ProjectionPremises, DEFAULT_PREMISES } from '@/types/dre';
+import type { SpreadsheetData } from '@/types/spreadsheet';
 import { DRETable } from '@/components/DRETable';
 import { DataImport } from '@/components/DataImport';
 import { ProjectionWizard } from '@/components/ProjectionWizard';
-import { VirtualizedSpreadsheet, SpreadsheetData } from '@/components/VirtualizedSpreadsheet';
+import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
 import { generateExcel } from '@/utils/excelExporter';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, Table2, Settings2, ArrowLeft, Copy } from 'lucide-react';
+import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const Index = () => {
@@ -19,25 +20,28 @@ const Index = () => {
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const { toast } = useToast();
 
-  const handleCopyToRight = useCallback(() => {
+  // Auto-copy left data to right whenever left changes
+  useEffect(() => {
     if (leftSpreadsheetData) {
-      // Deep copy the data
       const copiedData: SpreadsheetData = {
         values: leftSpreadsheetData.values.map(row => [...row]),
+        formats: leftSpreadsheetData.formats?.map(row => row.map(f => f ? { ...f } : null)),
+        mergedCells: leftSpreadsheetData.mergedCells?.map(m => ({ ...m })),
+        columnWidths: leftSpreadsheetData.columnWidths ? [...leftSpreadsheetData.columnWidths] : undefined,
+        rowHeights: leftSpreadsheetData.rowHeights ? [...leftSpreadsheetData.rowHeights] : undefined,
         rowCount: leftSpreadsheetData.rowCount,
         colCount: leftSpreadsheetData.colCount,
+        startRow: leftSpreadsheetData.startRow,
+        startCol: leftSpreadsheetData.startCol,
       };
       setRightSpreadsheetData(copiedData);
-      toast({
-        title: 'Dados copiados!',
-        description: `${copiedData.rowCount} linhas × ${copiedData.colCount} colunas copiadas para a direita.`,
-      });
+    } else {
+      setRightSpreadsheetData(null);
     }
-  }, [leftSpreadsheetData, toast]);
+  }, [leftSpreadsheetData]);
 
   const handleDataImported = useCallback((data: DREData) => {
     setDreData(data);
-    // Set base year from last period
     if (data.periods.length > 0) {
       setPremises(prev => ({
         ...prev,
@@ -48,7 +52,6 @@ const Index = () => {
 
   const handleUpdateRow = useCallback((rowId: string, updates: Partial<{ account: string; values: Record<string, number> }>) => {
     if (!dreData) return;
-    
     setDreData({
       ...dreData,
       rows: dreData.rows.map(row =>
@@ -85,50 +88,9 @@ const Index = () => {
     }
   }, [dreData, premises, toast]);
 
-  // Helper to generate column letters
-  const getColumnLetter = (index: number): string => {
-    let result = '';
-    let n = index;
-    while (n >= 0) {
-      result = String.fromCharCode(65 + (n % 26)) + result;
-      n = Math.floor(n / 26) - 1;
-    }
-    return result;
-  };
-
-  // Spreadsheet header component (with gridlines)
-  const SpreadsheetHeader: React.FC<{ columns: number; showGrid?: boolean }> = ({ columns, showGrid = true }) => (
-    <div
-      className={`grid ${showGrid ? 'border-b border-border' : ''} bg-muted sticky top-0 z-10`}
-      style={{ gridTemplateColumns: `40px repeat(${columns}, minmax(100px, 1fr))` }}
-    >
-      <div className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 text-xs font-medium text-muted-foreground text-center`}></div>
-      {Array.from({ length: columns }, (_, i) => (
-        <div key={i} className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 text-xs font-medium text-muted-foreground text-center`}>
-          {getColumnLetter(i)}
-        </div>
-      ))}
-    </div>
-  );
-
-  // Empty spreadsheet row (with gridlines)
-  const EmptyRow: React.FC<{ rowNumber: number; columns: number; showGrid?: boolean }> = ({ rowNumber, columns, showGrid = true }) => (
-    <div
-      className={`grid ${showGrid ? 'border-b border-border' : ''}`}
-      style={{ gridTemplateColumns: `40px repeat(${columns}, minmax(100px, 1fr))` }}
-    >
-      <div className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 text-xs font-medium text-muted-foreground text-center bg-muted min-h-[32px] flex items-center justify-center`}>
-        {rowNumber}
-      </div>
-      {Array.from({ length: columns }, (_, i) => (
-        <div key={i} className={`${showGrid ? 'border-r border-border' : ''} px-2 py-1.5 min-h-[32px] bg-background`}></div>
-      ))}
-    </div>
-  );
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Minimal spreadsheet-style header */}
+      {/* Header */}
       <header className="border-b border-border bg-muted/50 flex items-center justify-between px-3 py-1.5">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded bg-primary flex items-center justify-center">
@@ -153,41 +115,30 @@ const Index = () => {
       <main className="flex-1 flex overflow-hidden">
         {/* Left Panel - Excel Import Spreadsheet */}
         <div className="w-[40%] border-r border-border flex flex-col">
-          {/* Sheet tab with Copy button */}
+          {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
             <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
               <Table2 className="w-3.5 h-3.5 text-primary" />
               Dados Importados
             </div>
-            {leftSpreadsheetData && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleCopyToRight}
-                className="h-7 text-xs ml-2"
-              >
-                <Copy className="w-3.5 h-3.5 mr-1" />
-                Copiar para Direita
-              </Button>
-            )}
           </div>
 
           {/* Excel Upload / Spreadsheet */}
           <div className="flex-1 overflow-hidden">
-            <ExcelUpload 
-              data={leftSpreadsheetData} 
-              onDataLoaded={setLeftSpreadsheetData} 
+            <ExcelUpload
+              data={leftSpreadsheetData}
+              onDataLoaded={setLeftSpreadsheetData}
             />
           </div>
         </div>
 
-        {/* Right Panel - Copied Data Spreadsheet */}
+        {/* Right Panel - Mirrored Data */}
         <div className="w-[60%] flex flex-col">
           {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
             <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
               <Settings2 className="w-3.5 h-3.5 text-accent" />
-              Dados Copiados
+              Dados Espelhados
             </div>
             {rightSpreadsheetData && (
               <span className="text-xs text-muted-foreground ml-2">
@@ -207,12 +158,12 @@ const Index = () => {
         </div>
       </main>
 
-      {/* Footer formula bar style */}
+      {/* Footer */}
       <footer className="border-t border-border bg-muted/30 px-3 py-1 flex items-center text-xs text-muted-foreground">
         <span className="px-2 py-0.5 bg-muted rounded mr-2">fx</span>
         <span>
-          {leftSpreadsheetData 
-            ? `Importado: ${leftSpreadsheetData.rowCount} × ${leftSpreadsheetData.colCount}` 
+          {leftSpreadsheetData
+            ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
             : 'Aguardando importação de dados...'}
         </span>
       </footer>
