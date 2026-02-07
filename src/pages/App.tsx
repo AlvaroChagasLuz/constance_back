@@ -17,6 +17,7 @@ const Index = () => {
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
   const [step, setStep] = useState<AppStep>('import');
+  const [hasProjected, setHasProjected] = useState(false);
   const { toast } = useToast();
 
   // Auto-copy left data to right whenever left changes during import step
@@ -55,6 +56,7 @@ const Index = () => {
     setLeftSpreadsheetData(null);
     setRightSpreadsheetData(null);
     setOriginalRightData(null);
+    setHasProjected(false);
     setStep('import');
   }, []);
 
@@ -63,12 +65,21 @@ const Index = () => {
     
     const projected = addProjectionColumns(originalRightData, years);
     setRightSpreadsheetData(projected);
+    setHasProjected(true);
     
     toast({
       title: `${years} ano${years > 1 ? 's' : ''} adicionado${years > 1 ? 's' : ''}!`,
       description: `Projeção: ${projected.colCount} colunas no total.`,
     });
   }, [originalRightData, toast]);
+
+  const handleContinue = useCallback(() => {
+    toast({
+      title: 'Avançando...',
+      description: 'Próxima etapa do workflow.',
+    });
+    // Future: advance to next workflow step
+  }, [toast]);
 
   // Left panel tab label
   const leftTabLabel = step === 'modelling' ? 'Modelagem Financeira' : 'Dados Importados';
@@ -107,7 +118,11 @@ const Index = () => {
           {/* Left panel content */}
           <div className="flex-1 overflow-hidden">
             {step === 'modelling' ? (
-              <FinancialModellingPanel onYearsConfirmed={handleYearsConfirmed} />
+              <FinancialModellingPanel
+                onYearsConfirmed={handleYearsConfirmed}
+                onContinue={handleContinue}
+                hasProjected={hasProjected}
+              />
             ) : (
               <ExcelUpload
                 data={leftSpreadsheetData}

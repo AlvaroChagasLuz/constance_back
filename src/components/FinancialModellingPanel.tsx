@@ -6,16 +6,22 @@ import { Button } from '@/components/ui/button';
 
 interface FinancialModellingPanelProps {
   onYearsConfirmed?: (years: number) => void;
+  onContinue?: () => void;
+  hasProjected?: boolean;
 }
 
-export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = ({ onYearsConfirmed }) => {
+export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = ({
+  onYearsConfirmed,
+  onContinue,
+  hasProjected = false,
+}) => {
   const [years, setYears] = useState<string>('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setYears(e.target.value);
   };
 
-  const handleConfirm = () => {
+  const handleProject = () => {
     const num = parseInt(years, 10);
     if (!isNaN(num) && num > 0 && num <= 30) {
       onYearsConfirmed?.(num);
@@ -52,14 +58,14 @@ export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = (
             value={years}
             onChange={handleChange}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && isValid) handleConfirm();
+              if (e.key === 'Enter' && isValid) handleProject();
             }}
             className="text-center text-lg font-medium"
           />
         </div>
         <div className="w-full flex flex-col gap-3">
           <Button
-            onClick={handleConfirm}
+            onClick={handleProject}
             disabled={!isValid}
             className="w-full gap-2"
           >
@@ -68,8 +74,8 @@ export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = (
           </Button>
           <Button
             variant="outline"
-            onClick={handleConfirm}
-            disabled={!isValid}
+            onClick={onContinue}
+            disabled={!hasProjected}
             className="w-full gap-2"
           >
             Continuar
