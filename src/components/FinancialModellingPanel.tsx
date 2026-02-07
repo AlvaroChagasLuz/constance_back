@@ -1,23 +1,31 @@
 import React, { useState } from 'react';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
 
 interface FinancialModellingPanelProps {
-  onYearsSelected?: (years: number) => void;
+  onYearsConfirmed?: (years: number) => void;
 }
 
-export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = ({ onYearsSelected }) => {
+export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = ({ onYearsConfirmed }) => {
   const [years, setYears] = useState<string>('');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setYears(value);
-    const num = parseInt(value, 10);
-    if (!isNaN(num) && num > 0) {
-      onYearsSelected?.(num);
+    setYears(e.target.value);
+  };
+
+  const handleConfirm = () => {
+    const num = parseInt(years, 10);
+    if (!isNaN(num) && num > 0 && num <= 30) {
+      onYearsConfirmed?.(num);
     }
   };
+
+  const isValid = (() => {
+    const num = parseInt(years, 10);
+    return !isNaN(num) && num > 0 && num <= 30;
+  })();
 
   return (
     <div className="h-full flex flex-col items-center justify-center p-8 animate-fade-in">
@@ -43,9 +51,20 @@ export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = (
             placeholder="Ex: 5"
             value={years}
             onChange={handleChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && isValid) handleConfirm();
+            }}
             className="text-center text-lg font-medium"
           />
         </div>
+        <Button
+          onClick={handleConfirm}
+          disabled={!isValid}
+          className="w-full gap-2"
+        >
+          <ArrowRight className="w-4 h-4" />
+          Projetar {isValid ? `${years} ano${parseInt(years) > 1 ? 's' : ''}` : ''}
+        </Button>
       </div>
     </div>
   );

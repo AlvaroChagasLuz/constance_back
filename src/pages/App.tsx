@@ -5,6 +5,7 @@ import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
+import { addProjectionColumns } from '@/utils/projectionUtils';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ type AppStep = 'import' | 'confirm' | 'modelling';
 const Index = () => {
   const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
+  const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
   const [step, setStep] = useState<AppStep>('import');
   const { toast } = useToast();
 
@@ -34,6 +36,7 @@ const Index = () => {
         startCol: leftSpreadsheetData.startCol,
       };
       setRightSpreadsheetData(copiedData);
+      setOriginalRightData(copiedData);
       setStep('confirm');
     } else {
       setRightSpreadsheetData(null);
@@ -51,8 +54,21 @@ const Index = () => {
   const handleReject = useCallback(() => {
     setLeftSpreadsheetData(null);
     setRightSpreadsheetData(null);
+    setOriginalRightData(null);
     setStep('import');
   }, []);
+
+  const handleYearsConfirmed = useCallback((years: number) => {
+    if (!originalRightData) return;
+    
+    const projected = addProjectionColumns(originalRightData, years);
+    setRightSpreadsheetData(projected);
+    
+    toast({
+      title: `${years} ano${years > 1 ? 's' : ''} adicionado${years > 1 ? 's' : ''}!`,
+      description: `Projeção: ${projected.colCount} colunas no total.`,
+    });
+  }, [originalRightData, toast]);
 
   // Left panel tab label
   const leftTabLabel = step === 'modelling' ? 'Modelagem Financeira' : 'Dados Importados';
@@ -91,7 +107,7 @@ const Index = () => {
           {/* Left panel content */}
           <div className="flex-1 overflow-hidden">
             {step === 'modelling' ? (
-              <FinancialModellingPanel />
+              <FinancialModellingPanel onYearsConfirmed={handleYearsConfirmed} />
             ) : (
               <ExcelUpload
                 data={leftSpreadsheetData}
