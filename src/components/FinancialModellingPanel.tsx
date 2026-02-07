@@ -62,8 +62,8 @@ export const FinancialModellingPanel: React.FC<FinancialModellingPanelProps> = (
           disabled={!isValid}
           className="w-full gap-2"
         >
+          Continuar
           <ArrowRight className="w-4 h-4" />
-          Projetar {isValid ? `${years} ano${parseInt(years) > 1 ? 's' : ''}` : ''}
         </Button>
       </div>
     </div>
