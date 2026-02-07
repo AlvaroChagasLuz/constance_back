@@ -5,19 +5,19 @@ import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
+import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { addProjectionColumns } from '@/utils/projectionUtils';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, Table2, Settings2, ArrowLeft } from 'lucide-react';
+import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions';
 
 const Index = () => {
   const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
   const [step, setStep] = useState<AppStep>('import');
-  const [hasProjected, setHasProjected] = useState(false);
   const { toast } = useToast();
 
   // Auto-copy left data to right whenever left changes during import step
@@ -56,34 +56,76 @@ const Index = () => {
     setLeftSpreadsheetData(null);
     setRightSpreadsheetData(null);
     setOriginalRightData(null);
-    setHasProjected(false);
     setStep('import');
   }, []);
 
-  const handleYearsConfirmed = useCallback((years: number) => {
+  // Step 4: "Continuar" in modelling → add projection columns + advance to assumptions
+  const handleModellingContinue = useCallback((years: number) => {
     if (!originalRightData) return;
-    
+
     const projected = addProjectionColumns(originalRightData, years);
     setRightSpreadsheetData(projected);
-    setHasProjected(true);
-    
+    setStep('assumptions');
+
     toast({
       title: `${years} ano${years > 1 ? 's' : ''} adicionado${years > 1 ? 's' : ''}!`,
-      description: `Projeção: ${projected.colCount} colunas no total.`,
+      description: 'Defina as premissas de projeção.',
     });
   }, [originalRightData, toast]);
 
-  const handleContinue = useCallback(() => {
+  // Step 5: "Continuar" in assumptions → next workflow step (future)
+  const handleAssumptionsContinue = useCallback((revenueGrowthRate: number) => {
     toast({
-      title: 'Avançando...',
-      description: 'Próxima etapa do workflow.',
+      title: 'Premissas salvas!',
+      description: `Taxa de crescimento de receita: ${revenueGrowthRate}%`,
     });
     // Future: advance to next workflow step
   }, [toast]);
 
-  // Left panel tab label
-  const leftTabLabel = step === 'modelling' ? 'Modelagem Financeira' : 'Dados Importados';
-  const LeftTabIcon = step === 'modelling' ? TrendingUp : Table2;
+  // Left panel tab label & icon based on current step
+  const getLeftTabConfig = () => {
+    switch (step) {
+      case 'modelling':
+        return { label: 'Modelagem Financeira', Icon: TrendingUp };
+      case 'assumptions':
+        return { label: 'Premissas de Projeção', Icon: BarChart3 };
+      default:
+        return { label: 'Dados Importados', Icon: Table2 };
+    }
+  };
+
+  const { label: leftTabLabel, Icon: LeftTabIcon } = getLeftTabConfig();
+
+  // Render left panel content based on step
+  const renderLeftPanel = () => {
+    switch (step) {
+      case 'modelling':
+        return <FinancialModellingPanel onContinue={handleModellingContinue} />;
+      case 'assumptions':
+        return <ProjectionAssumptions onContinue={handleAssumptionsContinue} />;
+      default:
+        return (
+          <ExcelUpload
+            data={leftSpreadsheetData}
+            onDataLoaded={setLeftSpreadsheetData}
+          />
+        );
+    }
+  };
+
+  // Footer status text
+  const getFooterText = () => {
+    switch (step) {
+      case 'modelling':
+        return 'Dados confirmados — Defina o número de anos';
+      case 'assumptions':
+        return 'Colunas projetadas — Defina as premissas';
+      default:
+        return leftSpreadsheetData
+          ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
+          : 'Aguardando importação de dados...';
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -117,18 +159,7 @@ const Index = () => {
 
           {/* Left panel content */}
           <div className="flex-1 overflow-hidden">
-            {step === 'modelling' ? (
-              <FinancialModellingPanel
-                onYearsConfirmed={handleYearsConfirmed}
-                onContinue={handleContinue}
-                hasProjected={hasProjected}
-              />
-            ) : (
-              <ExcelUpload
-                data={leftSpreadsheetData}
-                onDataLoaded={setLeftSpreadsheetData}
-              />
-            )}
+            {renderLeftPanel()}
           </div>
         </div>
 
@@ -172,13 +203,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t border-border bg-muted/30 px-3 py-1 flex items-center text-xs text-muted-foreground">
         <span className="px-2 py-0.5 bg-muted rounded mr-2">fx</span>
-        <span>
-          {step === 'modelling'
-            ? 'Dados confirmados — Configure a projeção'
-            : leftSpreadsheetData
-              ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
-              : 'Aguardando importação de dados...'}
-        </span>
+        <span>{getFooterText()}</span>
       </footer>
     </div>
   );
