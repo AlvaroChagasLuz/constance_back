@@ -84,7 +84,25 @@ const Cell = ({
 
   const cellValue = spreadsheetData?.values?.[rowIndex]?.[columnIndex];
   const cellFormat = spreadsheetData?.formats?.[rowIndex]?.[columnIndex];
-  const displayValue = cellValue != null ? String(cellValue) : '';
+
+  // Format numbers to max 2 decimal places
+  let displayValue = '';
+  if (cellValue != null) {
+    if (typeof cellValue === 'number') {
+      displayValue = Number.isInteger(cellValue)
+        ? String(cellValue)
+        : parseFloat(cellValue.toFixed(2)).toString();
+    } else {
+      const str = String(cellValue);
+      // Also handle string values that are numeric with excess decimals
+      const num = parseFloat(str);
+      if (!isNaN(num) && str === String(num) && !Number.isInteger(num)) {
+        displayValue = parseFloat(num.toFixed(2)).toString();
+      } else {
+        displayValue = str;
+      }
+    }
+  }
 
   // Build cell style with formatting
   const cellStyle: React.CSSProperties = { ...style };
