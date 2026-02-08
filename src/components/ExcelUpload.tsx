@@ -4,6 +4,8 @@ import { VirtualizedSpreadsheet } from './VirtualizedSpreadsheet';
 import { Button } from '@/components/ui/button';
 import { parseExcelWithFormatting, parseClipboardHtml } from '@/utils/excelFormatParser';
 import type { SpreadsheetData } from '@/types/spreadsheet';
+import { validateFile, validateSpreadsheetData, MAX_ROWS, MAX_COLUMNS } from '@/utils/fileValidation';
+import { useToast } from '@/hooks/use-toast';
 
 interface ExcelUploadProps {
   onDataLoaded: (data: SpreadsheetData) => void;
@@ -15,19 +17,48 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
   const [isDragOver, setIsDragOver] = useState(false);
   const [dimensions, setDimensions] = useState<{ rows: number; cols: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const handleExcelFile = useCallback(async (file: File) => {
+    // Validate file before processing
+    const fileCheck = validateFile(file, 'excel');
+    if (!fileCheck.valid) {
+      toast({
+        title: 'Arquivo inválido',
+        description: fileCheck.error,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const spreadsheetData = await parseExcelWithFormatting(file);
+
+      // Validate parsed data dimensions
+      const dataCheck = validateSpreadsheetData(spreadsheetData);
+      if (!dataCheck.valid) {
+        toast({
+          title: 'Dados inválidos',
+          description: dataCheck.error,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       setDimensions({ rows: spreadsheetData.rowCount, cols: spreadsheetData.colCount });
       onDataLoaded(spreadsheetData);
     } catch (error) {
       console.error('Error parsing Excel file:', error);
+      toast({
+        title: 'Erro ao processar arquivo',
+        description: error instanceof Error ? error.message : 'Formato inválido ou arquivo corrompido.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [onDataLoaded]);
+  }, [onDataLoaded, toast]);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -38,9 +69,15 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
       const file = files[0];
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         handleExcelFile(file);
+      } else {
+        toast({
+          title: 'Formato não suportado',
+          description: 'Por favor, use arquivos .xlsx ou .xls.',
+          variant: 'destructive',
+        });
       }
     }
-  }, [handleExcelFile]);
+  }, [handleExcelFile, toast]);
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -55,11 +92,10 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const file = files[0];
-      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-        handleExcelFile(file);
-      }
+      handleExcelFile(files[0]);
     }
+    // Reset input so re-selecting the same file triggers onChange
+    e.target.value = '';
   }, [handleExcelFile]);
 
   const handleClick = useCallback(() => {
@@ -72,6 +108,16 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
     if (html) {
       const parsed = parseClipboardHtml(html);
       if (parsed) {
+        // Validate dimensions
+        const dataCheck = validateSpreadsheetData(parsed);
+        if (!dataCheck.valid) {
+          toast({
+            title: 'Dados inválidos',
+            description: dataCheck.error,
+            variant: 'destructive',
+          });
+          return;
+        }
         e.preventDefault();
         setDimensions({ rows: parsed.rowCount, cols: parsed.colCount });
         onDataLoaded(parsed);
@@ -84,6 +130,17 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
     if (text) {
       e.preventDefault();
       const rows = text.split('\n').filter(r => r.length > 0);
+
+      // Validate row count
+      if (rows.length > MAX_ROWS) {
+        toast({
+          title: 'Dados inválidos',
+          description: `Os dados colados excedem o limite de ${MAX_ROWS} linhas.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const values = rows.map(row => {
         return row.split('\t').map(cell => {
           const trimmed = cell.trim();
@@ -94,20 +151,31 @@ export const ExcelUpload: React.FC<ExcelUploadProps> = ({ onDataLoaded, data }) 
       });
       
       const maxCols = Math.max(...values.map(r => r.length));
+
+      // Validate column count
+      if (maxCols > MAX_COLUMNS) {
+        toast({
+          title: 'Dados inválidos',
+          description: `Os dados colados excedem o limite de ${MAX_COLUMNS} colunas.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const normalized = values.map(row => {
         while (row.length < maxCols) row.push(null);
         return row;
       });
       
-      const data: SpreadsheetData = {
+      const spreadsheetData: SpreadsheetData = {
         values: normalized,
         rowCount: normalized.length,
         colCount: maxCols,
       };
-      setDimensions({ rows: data.rowCount, cols: data.colCount });
-      onDataLoaded(data);
+      setDimensions({ rows: spreadsheetData.rowCount, cols: spreadsheetData.colCount });
+      onDataLoaded(spreadsheetData);
     }
-  }, [onDataLoaded]);
+  }, [onDataLoaded, toast]);
 
   // If no data, show upload zone
   if (!data) {
