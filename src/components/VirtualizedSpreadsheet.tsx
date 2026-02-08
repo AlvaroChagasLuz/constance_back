@@ -1,7 +1,8 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Grid, GridImperativeAPI } from 'react-window';
 import type { SpreadsheetData, CellFormat, MergedCell } from '@/types/spreadsheet';
 import { borderToCss } from '@/utils/excelFormatParser';
+import { useSpreadsheetResize } from '@/hooks/useSpreadsheetResize';
 
 // Re-export SpreadsheetData for backward compatibility
 export type { SpreadsheetData } from '@/types/spreadsheet';
@@ -174,6 +175,9 @@ const Cell = ({
   );
 };
 
+// Resize handle width/height in pixels
+const HANDLE_SIZE = 5;
+
 export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   totalRows = 1000,
   totalColumns = 100,
@@ -192,28 +196,33 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   const actualRows = data ? Math.max(data.rowCount, 20) : totalRows;
   const actualColumns = data ? Math.max(data.colCount, 10) : totalColumns;
 
-  // Column widths and row heights from data or defaults
-  const columnWidths = useMemo(() => {
-    if (data?.columnWidths && data.columnWidths.length >= actualColumns) {
-      return data.columnWidths.slice(0, actualColumns);
-    }
+  // Base column widths and row heights from data or defaults
+  const baseColumnWidths = useMemo(() => {
     const widths = data?.columnWidths ? [...data.columnWidths] : [];
     while (widths.length < actualColumns) {
       widths.push(100);
     }
-    return widths;
+    return widths.slice(0, actualColumns);
   }, [data?.columnWidths, actualColumns]);
 
-  const rowHeights = useMemo(() => {
-    if (data?.rowHeights && data.rowHeights.length >= actualRows) {
-      return data.rowHeights.slice(0, actualRows);
-    }
+  const baseRowHeights = useMemo(() => {
     const heights = data?.rowHeights ? [...data.rowHeights] : [];
     while (heights.length < actualRows) {
       heights.push(32);
     }
-    return heights;
+    return heights.slice(0, actualRows);
   }, [data?.rowHeights, actualRows]);
+
+  // Resize hook
+  const {
+    effectiveColumnWidths: columnWidths,
+    effectiveRowHeights: rowHeights,
+    getColumnWidth,
+    getRowHeight,
+    startColumnResize,
+    startRowResize,
+    isResizing,
+  } = useSpreadsheetResize(baseColumnWidths, baseRowHeights);
 
   // Precompute cumulative offsets for variable-size columns/rows
   const colOffsets = useMemo(() => {
@@ -275,6 +284,8 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
     return () => gridElement.removeEventListener('scroll', handleScroll);
   }, [containerSize]);
 
+  // The Grid re-renders when getColWidthForGrid / getRowHeightForGrid references change.
+
   // Calculate visible ranges with buffer
   const visibleColStart = useMemo(() => {
     let i = 0;
@@ -305,14 +316,34 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   const gridWidth = containerSize.width - rowNumberWidth;
   const gridHeight = containerSize.height - headerHeight;
 
-  // Column headers
+  // Column header resize handler
+  const handleColumnResizeMouseDown = useCallback(
+    (colIndex: number, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startColumnResize(colIndex, e.clientX);
+    },
+    [startColumnResize]
+  );
+
+  // Row resize handler
+  const handleRowResizeMouseDown = useCallback(
+    (rowIndex: number, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      startRowResize(rowIndex, e.clientY);
+    },
+    [startRowResize]
+  );
+
+  // Column headers with resize handles
   const columnHeaders = useMemo(() => {
     const headers = [];
     for (let i = visibleColStart; i <= visibleColEnd; i++) {
       headers.push(
         <div
           key={i}
-          className="absolute border-r border-b border-border flex items-center justify-center text-xs font-medium text-muted-foreground bg-muted"
+          className="absolute border-r border-b border-border flex items-center justify-center text-xs font-medium text-muted-foreground bg-muted select-none"
           style={{
             left: colOffsets[i],
             width: columnWidths[i],
@@ -320,20 +351,26 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
           }}
         >
           {getColumnLetter(i)}
+          {/* Resize handle on right edge */}
+          <div
+            className="absolute top-0 right-0 h-full hover:bg-primary/40 transition-colors"
+            style={{ width: HANDLE_SIZE, cursor: 'col-resize', zIndex: 5 }}
+            onMouseDown={(e) => handleColumnResizeMouseDown(i, e)}
+          />
         </div>
       );
     }
     return headers;
-  }, [visibleColStart, visibleColEnd, colOffsets, columnWidths, headerHeight]);
+  }, [visibleColStart, visibleColEnd, colOffsets, columnWidths, headerHeight, handleColumnResizeMouseDown]);
 
-  // Row numbers
+  // Row numbers with resize handles
   const rowNumbers = useMemo(() => {
     const numbers = [];
     for (let i = visibleRowStart; i <= visibleRowEnd; i++) {
       numbers.push(
         <div
           key={i}
-          className="absolute border-r border-b border-border flex items-center justify-center text-xs font-medium text-muted-foreground bg-muted"
+          className="absolute border-r border-b border-border flex items-center justify-center text-xs font-medium text-muted-foreground bg-muted select-none"
           style={{
             top: rowOffsets[i],
             width: rowNumberWidth,
@@ -341,11 +378,17 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
           }}
         >
           {i + 1}
+          {/* Resize handle on bottom edge */}
+          <div
+            className="absolute bottom-0 left-0 w-full hover:bg-primary/40 transition-colors"
+            style={{ height: HANDLE_SIZE, cursor: 'row-resize', zIndex: 5 }}
+            onMouseDown={(e) => handleRowResizeMouseDown(i, e)}
+          />
         </div>
       );
     }
     return numbers;
-  }, [visibleRowStart, visibleRowEnd, rowOffsets, rowHeights, rowNumberWidth]);
+  }, [visibleRowStart, visibleRowEnd, rowOffsets, rowHeights, rowNumberWidth, handleRowResizeMouseDown]);
 
   // Cell props
   const cellProps = useMemo<CellData>(
@@ -359,18 +402,22 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
     [data, mergedHidden, mergedSpans, columnWidths, rowHeights]
   );
 
-  // Use variable-size getters for the Grid
-  const getColumnWidth = useMemo(
-    () => (index: number) => columnWidths[index] || 100,
-    [columnWidths]
+  // Variable-size getters for the Grid
+  const getColWidthForGrid = useMemo(
+    () => (index: number) => getColumnWidth(index),
+    [getColumnWidth]
   );
-  const getRowHeight = useMemo(
-    () => (index: number) => rowHeights[index] || 32,
-    [rowHeights]
+  const getRowHeightForGrid = useMemo(
+    () => (index: number) => getRowHeight(index),
+    [getRowHeight]
   );
 
   return (
-    <div ref={containerRef} className="relative h-full w-full overflow-hidden bg-background">
+    <div
+      ref={containerRef}
+      className="relative h-full w-full overflow-hidden bg-background"
+      style={isResizing ? { cursor: 'grabbing', userSelect: 'none' } : undefined}
+    >
       {containerSize.width > 0 && containerSize.height > 0 && (
         <>
           {/* Fixed corner cell */}
@@ -436,9 +483,9 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
               cellComponent={Cell}
               cellProps={cellProps}
               columnCount={actualColumns}
-              columnWidth={getColumnWidth}
+              columnWidth={getColWidthForGrid}
               rowCount={actualRows}
-              rowHeight={getRowHeight}
+              rowHeight={getRowHeightForGrid}
               overscanCount={5}
               style={{ width: gridWidth, height: gridHeight }}
             />
