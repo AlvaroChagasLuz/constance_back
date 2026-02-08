@@ -85,22 +85,27 @@ const Cell = ({
   const cellValue = spreadsheetData?.values?.[rowIndex]?.[columnIndex];
   const cellFormat = spreadsheetData?.formats?.[rowIndex]?.[columnIndex];
 
-  // Format numbers to max 2 decimal places
+  // Format numbers: max 2 decimals, Brazilian locale (dot = thousands, comma = decimal)
   let displayValue = '';
   if (cellValue != null) {
+    let num: number | null = null;
     if (typeof cellValue === 'number') {
-      displayValue = Number.isInteger(cellValue)
-        ? String(cellValue)
-        : parseFloat(cellValue.toFixed(2)).toString();
+      num = cellValue;
     } else {
       const str = String(cellValue);
-      // Also handle string values that are numeric with excess decimals
-      const num = parseFloat(str);
-      if (!isNaN(num) && str === String(num) && !Number.isInteger(num)) {
-        displayValue = parseFloat(num.toFixed(2)).toString();
-      } else {
-        displayValue = str;
+      const parsed = parseFloat(str);
+      if (!isNaN(parsed) && str === String(parsed)) {
+        num = parsed;
       }
+    }
+
+    if (num !== null) {
+      displayValue = num.toLocaleString('pt-BR', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      });
+    } else {
+      displayValue = String(cellValue);
     }
   }
 
