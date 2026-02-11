@@ -14,17 +14,18 @@ import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } 
 import { Button } from '@/components/ui/button';
 
 type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions';
-type RightTab = 'data' | 'assumptions';
+type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
   const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
   const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
+  const [baseSheetData, setBaseSheetData] = useState<SpreadsheetData | null>(null);
   const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
   const [projectedBaseData, setProjectedBaseData] = useState<SpreadsheetData | null>(null);
   const [originalColCount, setOriginalColCount] = useState<number>(0);
   const [hasAppliedRevenue, setHasAppliedRevenue] = useState(false);
   const [step, setStep] = useState<AppStep>('import');
-  const [activeRightTab, setActiveRightTab] = useState<RightTab>('data');
+  const [activeRightTab, setActiveRightTab] = useState<RightTab>('financials');
   const [assumptionsSheetData, setAssumptionsSheetData] = useState<SpreadsheetData | null>(null);
   const [assumptionEntries, setAssumptionEntries] = useState<AssumptionEntry[]>([]);
   const { toast } = useToast();
@@ -34,23 +35,26 @@ const Index = () => {
     if (step !== 'import') return;
 
     if (leftSpreadsheetData) {
-      const copiedData: SpreadsheetData = {
-        values: leftSpreadsheetData.values.map(row => [...row]),
-        formats: leftSpreadsheetData.formats?.map(row => row.map(f => f ? { ...f } : null)),
-        mergedCells: leftSpreadsheetData.mergedCells?.map(m => ({ ...m })),
-        columnWidths: leftSpreadsheetData.columnWidths ? [...leftSpreadsheetData.columnWidths] : undefined,
-        rowHeights: leftSpreadsheetData.rowHeights ? [...leftSpreadsheetData.rowHeights] : undefined,
-        rowCount: leftSpreadsheetData.rowCount,
-        colCount: leftSpreadsheetData.colCount,
-        startRow: leftSpreadsheetData.startRow,
-        startCol: leftSpreadsheetData.startCol,
-      };
+      const deepCopy = (src: SpreadsheetData): SpreadsheetData => ({
+        values: src.values.map(row => [...row]),
+        formats: src.formats?.map(row => row.map(f => f ? { ...f } : null)),
+        mergedCells: src.mergedCells?.map(m => ({ ...m })),
+        columnWidths: src.columnWidths ? [...src.columnWidths] : undefined,
+        rowHeights: src.rowHeights ? [...src.rowHeights] : undefined,
+        rowCount: src.rowCount,
+        colCount: src.colCount,
+        startRow: src.startRow,
+        startCol: src.startCol,
+      });
+      const copiedData = deepCopy(leftSpreadsheetData);
+      setBaseSheetData(deepCopy(leftSpreadsheetData));
       setRightSpreadsheetData(copiedData);
       setOriginalRightData(copiedData);
       setOriginalColCount(copiedData.colCount);
       setStep('confirm');
     } else {
       setRightSpreadsheetData(null);
+      setBaseSheetData(null);
     }
   }, [leftSpreadsheetData]);
 
@@ -65,11 +69,12 @@ const Index = () => {
   const handleReject = useCallback(() => {
     setLeftSpreadsheetData(null);
     setRightSpreadsheetData(null);
+    setBaseSheetData(null);
     setOriginalRightData(null);
     setProjectedBaseData(null);
     setOriginalColCount(0);
     setHasAppliedRevenue(false);
-    setActiveRightTab('data');
+    setActiveRightTab('financials');
     setAssumptionsSheetData(null);
     setAssumptionEntries([]);
     setStep('import');
@@ -258,16 +263,29 @@ const Index = () => {
         <div className="w-[60%] flex flex-col">
           {/* Sheet tabs */}
           <div className="flex items-center bg-muted/30 border-b border-border">
+            {baseSheetData && (
+              <button
+                onClick={() => setActiveRightTab('base')}
+                className={`px-3 py-1.5 text-xs font-medium border-r border-border flex items-center gap-1.5 transition-colors ${
+                  activeRightTab === 'base'
+                    ? 'bg-background text-foreground'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted/80'
+                }`}
+              >
+                <Table2 className="w-3.5 h-3.5 text-muted-foreground" />
+                Base
+              </button>
+            )}
             <button
-              onClick={() => setActiveRightTab('data')}
+              onClick={() => setActiveRightTab('financials')}
               className={`px-3 py-1.5 text-xs font-medium border-r border-border flex items-center gap-1.5 transition-colors ${
-                activeRightTab === 'data'
+                activeRightTab === 'financials'
                   ? 'bg-background text-foreground'
                   : 'bg-muted/50 text-muted-foreground hover:bg-muted/80'
               }`}
             >
               <Settings2 className="w-3.5 h-3.5 text-accent" />
-              Dados Espelhados
+              Financials
             </button>
             {assumptionsSheetData && (
               <button
@@ -282,9 +300,14 @@ const Index = () => {
                 Premissas
               </button>
             )}
-            {activeRightTab === 'data' && rightSpreadsheetData && (
+            {activeRightTab === 'financials' && rightSpreadsheetData && (
               <span className="text-xs text-muted-foreground ml-2">
                 {rightSpreadsheetData.rowCount} linhas × {rightSpreadsheetData.colCount} colunas
+              </span>
+            )}
+            {activeRightTab === 'base' && baseSheetData && (
+              <span className="text-xs text-muted-foreground ml-2">
+                {baseSheetData.rowCount} linhas × {baseSheetData.colCount} colunas
               </span>
             )}
             {activeRightTab === 'assumptions' && assumptionsSheetData && (
@@ -296,10 +319,10 @@ const Index = () => {
 
           {/* Spreadsheet content */}
           <div className="flex-1 overflow-hidden border-t border-border relative">
-            {step === 'confirm' && activeRightTab === 'data' && (
+            {step === 'confirm' && activeRightTab === 'financials' && (
               <ConfirmationBanner onConfirm={handleConfirm} onReject={handleReject} />
             )}
-            {activeRightTab === 'data' ? (
+            {activeRightTab === 'financials' ? (
               rightSpreadsheetData ? (
                 <VirtualizedSpreadsheet
                   data={rightSpreadsheetData}
@@ -312,6 +335,14 @@ const Index = () => {
                     Cole seus dados do Excel no painel esquerdo
                   </p>
                 </div>
+              )
+            ) : activeRightTab === 'base' ? (
+              baseSheetData && (
+                <VirtualizedSpreadsheet
+                  data={baseSheetData}
+                  totalRows={1000}
+                  totalColumns={100}
+                />
               )
             ) : (
               assumptionsSheetData && (
