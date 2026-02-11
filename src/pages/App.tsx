@@ -7,7 +7,7 @@ import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
-import { addProjectionColumns, applyRevenueProjection, findRevenueRow } from '@/utils/projectionUtils';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, findRevenueRow } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
@@ -147,8 +147,14 @@ const Index = () => {
     setStep('assumptions');
   }, []);
 
-  // Step 6b: Continue from deductions
+  // Step 6b: Continue from deductions — apply deductions to grid
   const handleDeductionsContinue = useCallback((deductionsPercent: number) => {
+    if (!rightSpreadsheetData) return;
+
+    // Apply deductions projection to the spreadsheet
+    const updated = applyDeductionsProjection(rightSpreadsheetData, deductionsPercent, originalColCount);
+    setRightSpreadsheetData(updated);
+
     // Update assumptions entries
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Deduções sobre Receita Bruta'),
@@ -163,10 +169,10 @@ const Index = () => {
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
     toast({
-      title: 'Deduções configuradas!',
-      description: `${deductionsPercent}% de deduções sobre a receita bruta.`,
+      title: 'Deduções aplicadas!',
+      description: `${deductionsPercent}% de deduções projetadas em todas as colunas.`,
     });
-  }, [assumptionEntries, toast]);
+  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {

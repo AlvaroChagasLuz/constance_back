@@ -125,6 +125,15 @@ const REVENUE_PATTERNS: { labels: string[]; priority: number }[] = [
 ];
 
 /**
+ * Deductions label patterns in priority order.
+ */
+const DEDUCTIONS_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['deduções', 'deducoes', 'deductions'], priority: 1 },
+  { labels: ['impostos sobre vendas', 'sales taxes'], priority: 2 },
+  { labels: ['devoluções', 'devolucoes', 'returns'], priority: 3 },
+];
+
+/**
  * Find the row index that contains the revenue line item.
  * Searches all rows in the first few columns for matching labels.
  * Returns the row index or null if not found.
@@ -218,6 +227,80 @@ export function applyRevenueProjection(
     // Round to 2 decimal places
     newValues[revenueRow][c] = Math.round(projectedValue * 100) / 100;
     previousValue = projectedValue;
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
+}
+
+/**
+ * Find the row index that contains the deductions line item.
+ */
+export function findDeductionsRow(data: SpreadsheetData): number | null {
+  const maxLabelCols = Math.min(5, data.colCount);
+  const candidates: { row: number; priority: number }[] = [];
+
+  for (let r = 0; r < data.values.length; r++) {
+    const row = data.values[r];
+    if (!row) continue;
+
+    for (let c = 0; c < maxLabelCols; c++) {
+      const val = row[c];
+      if (val == null) continue;
+
+      const cellText = String(val).trim().toLowerCase();
+      if (!cellText) continue;
+
+      for (const pattern of DEDUCTIONS_PATTERNS) {
+        if (pattern.labels.some(label => cellText.includes(label))) {
+          candidates.push({ row: r, priority: pattern.priority });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].row;
+}
+
+/**
+ * Apply deductions as a percentage of gross revenue to each projected column.
+ * Deductions = Revenue × (deductionsPercent / 100), stored as negative value.
+ */
+export function applyDeductionsProjection(
+  data: SpreadsheetData,
+  deductionsPercent: number,
+  originalColCount: number
+): SpreadsheetData {
+  const revenueRow = findRevenueRow(data);
+  const deductionsRow = findDeductionsRow(data);
+
+  if (revenueRow === null || deductionsRow === null) {
+    return data;
+  }
+
+  // Deep clone values
+  const newValues = data.values.map(row => [...row]);
+
+  const rate = deductionsPercent / 100;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const revenueVal = newValues[revenueRow][c];
+    if (revenueVal == null) continue;
+
+    const revenue = typeof revenueVal === 'number' ? revenueVal : parseFloat(String(revenueVal));
+    if (isNaN(revenue)) continue;
+
+    // Deductions are typically negative in a DRE
+    const deduction = Math.round(revenue * rate * 100) / 100;
+    newValues[deductionsRow][c] = -deduction;
   }
 
   return {
