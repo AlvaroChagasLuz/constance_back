@@ -6,13 +6,14 @@ import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
-import { addProjectionColumns, applyRevenueProjection } from '@/utils/projectionUtils';
+import { RevenueDeductions } from '@/components/RevenueDeductions';
+import { addProjectionColumns, applyRevenueProjection, findRevenueRow } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions';
 type RightTab = 'data' | 'assumptions';
 
 const Index = () => {
@@ -120,14 +121,52 @@ const Index = () => {
     });
   }, [projectedBaseData, originalColCount, assumptionEntries, toast]);
 
-  // Step 5b: "Continuar" — advance to next workflow step
+  // Step 5b: "Continuar" — advance to deductions step
   const handleAssumptionsContinue = useCallback(() => {
-    // Future: advance to next workflow step (e.g., COGS, SG&A)
+    setStep('deductions');
     toast({
-      title: 'Premissas confirmadas!',
-      description: 'Avançando para a próxima etapa.',
+      title: 'Projeção de receita confirmada!',
+      description: 'Defina as deduções sobre a receita bruta.',
     });
   }, [toast]);
+
+  // Get the first projected gross revenue value for the deductions preview
+  const projectedGrossRevenue = React.useMemo(() => {
+    if (!rightSpreadsheetData || originalColCount === 0) return null;
+    const revenueRow = findRevenueRow(rightSpreadsheetData);
+    if (revenueRow === null) return null;
+    // Get first projected column value
+    const val = rightSpreadsheetData.values[revenueRow]?.[originalColCount];
+    if (val == null) return null;
+    const num = typeof val === 'number' ? val : parseFloat(String(val));
+    return isNaN(num) ? null : num;
+  }, [rightSpreadsheetData, originalColCount]);
+
+  // Step 6a: Back from deductions to assumptions
+  const handleDeductionsBack = useCallback(() => {
+    setStep('assumptions');
+  }, []);
+
+  // Step 6b: Continue from deductions
+  const handleDeductionsContinue = useCallback((deductionsPercent: number) => {
+    // Update assumptions entries
+    const newEntries: AssumptionEntry[] = [
+      ...assumptionEntries.filter(e => e.label !== 'Deduções sobre Receita Bruta'),
+      {
+        category: 'Deduções',
+        label: 'Deduções sobre Receita Bruta',
+        value: deductionsPercent,
+        unit: '% da Receita Bruta',
+      },
+    ];
+    setAssumptionEntries(newEntries);
+    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
+
+    toast({
+      title: 'Deduções configuradas!',
+      description: `${deductionsPercent}% de deduções sobre a receita bruta.`,
+    });
+  }, [assumptionEntries, toast]);
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {
@@ -136,6 +175,8 @@ const Index = () => {
         return { label: 'Modelagem Financeira', Icon: TrendingUp };
       case 'assumptions':
         return { label: 'Premissas de Projeção', Icon: BarChart3 };
+      case 'deductions':
+        return { label: 'Deduções de Receita', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -150,6 +191,14 @@ const Index = () => {
         return <FinancialModellingPanel onContinue={handleModellingContinue} />;
       case 'assumptions':
         return <ProjectionAssumptions onApply={handleApplyRevenue} onContinue={handleAssumptionsContinue} hasApplied={hasAppliedRevenue} />;
+      case 'deductions':
+        return (
+          <RevenueDeductions
+            projectedGrossRevenue={projectedGrossRevenue}
+            onBack={handleDeductionsBack}
+            onContinue={handleDeductionsContinue}
+          />
+        );
       default:
         return (
           <ExcelUpload
@@ -167,6 +216,8 @@ const Index = () => {
         return 'Dados confirmados — Defina o número de anos';
       case 'assumptions':
         return 'Colunas projetadas — Defina as premissas';
+      case 'deductions':
+        return 'Receita projetada — Defina as deduções';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
