@@ -7,7 +7,7 @@ import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, findRevenueRow } from '@/utils/projectionUtils';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
@@ -130,18 +130,6 @@ const Index = () => {
     });
   }, [toast]);
 
-  // Get the first projected gross revenue value for the deductions preview
-  const projectedGrossRevenue = React.useMemo(() => {
-    if (!rightSpreadsheetData || originalColCount === 0) return null;
-    const revenueRow = findRevenueRow(rightSpreadsheetData);
-    if (revenueRow === null) return null;
-    // Get first projected column value
-    const val = rightSpreadsheetData.values[revenueRow]?.[originalColCount];
-    if (val == null) return null;
-    const num = typeof val === 'number' ? val : parseFloat(String(val));
-    return isNaN(num) ? null : num;
-  }, [rightSpreadsheetData, originalColCount]);
-
   // Step 6a: Back from deductions to assumptions
   const handleDeductionsBack = useCallback(() => {
     setStep('assumptions');
@@ -200,7 +188,6 @@ const Index = () => {
       case 'deductions':
         return (
           <RevenueDeductions
-            projectedGrossRevenue={projectedGrossRevenue}
             onBack={handleDeductionsBack}
             onContinue={handleDeductionsContinue}
           />

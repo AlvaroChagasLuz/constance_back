@@ -6,13 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface RevenueDeductionsProps {
-  projectedGrossRevenue: number | null;
   onBack?: () => void;
   onContinue?: (deductionsPercent: number) => void;
 }
 
 export const RevenueDeductions: React.FC<RevenueDeductionsProps> = ({
-  projectedGrossRevenue,
   onBack,
   onContinue,
 }) => {
@@ -27,19 +25,6 @@ export const RevenueDeductions: React.FC<RevenueDeductionsProps> = ({
 
   const isValid = parsedValue !== null && parsedValue >= 0 && parsedValue <= 100;
   const showError = touched && !isValid && deductionsStr.trim() !== '';
-
-  const deductionsAmount = useMemo(() => {
-    if (!isValid || projectedGrossRevenue === null) return null;
-    return projectedGrossRevenue * (parsedValue! / 100);
-  }, [isValid, parsedValue, projectedGrossRevenue]);
-
-  const netRevenue = useMemo(() => {
-    if (deductionsAmount === null || projectedGrossRevenue === null) return null;
-    return projectedGrossRevenue - deductionsAmount;
-  }, [deductionsAmount, projectedGrossRevenue]);
-
-  const formatBRL = (value: number) =>
-    value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleContinue = () => {
     if (isValid && parsedValue !== null) {
@@ -103,30 +88,6 @@ export const RevenueDeductions: React.FC<RevenueDeductionsProps> = ({
             </p>
           )}
         </div>
-
-        {/* Preview Card */}
-        {projectedGrossRevenue !== null && isValid && (
-          <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm animate-fade-in">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Receita Bruta Projetada</span>
-              <span className="font-medium text-foreground">
-                R$ {formatBRL(projectedGrossRevenue)}
-              </span>
-            </div>
-            <div className="flex justify-between text-destructive/80">
-              <span>(−) Deduções ({parsedValue!.toLocaleString('pt-BR')}%)</span>
-              <span className="font-medium">
-                R$ {formatBRL(deductionsAmount!)}
-              </span>
-            </div>
-            <div className="border-t border-border pt-2 flex justify-between font-semibold">
-              <span className="text-foreground">(=) Receita Líquida</span>
-              <span className="text-accent">
-                R$ {formatBRL(netRevenue!)}
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Buttons */}
         <div className="w-full flex flex-col gap-2">
