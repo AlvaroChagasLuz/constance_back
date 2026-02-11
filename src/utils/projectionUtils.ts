@@ -134,6 +134,13 @@ const DEDUCTIONS_PATTERNS: { labels: string[]; priority: number }[] = [
 ];
 
 /**
+ * Net Revenue label patterns — must match specifically "receita líquida" / "net revenue".
+ */
+const NET_REVENUE_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['receita líquida', 'receita liquida', 'net revenue'], priority: 1 },
+];
+
+/**
  * Find the row index that contains the revenue line item.
  * Searches all rows in the first few columns for matching labels.
  * Returns the row index or null if not found.
@@ -271,8 +278,39 @@ export function findDeductionsRow(data: SpreadsheetData): number | null {
 }
 
 /**
+ * Find the row index that contains the net revenue line item.
+ */
+export function findNetRevenueRow(data: SpreadsheetData): number | null {
+  const maxLabelCols = Math.min(5, data.colCount);
+  const candidates: { row: number; priority: number }[] = [];
+
+  for (let r = 0; r < data.values.length; r++) {
+    const row = data.values[r];
+    if (!row) continue;
+
+    for (let c = 0; c < maxLabelCols; c++) {
+      const val = row[c];
+      if (val == null) continue;
+
+      const cellText = String(val).trim().toLowerCase();
+      if (!cellText) continue;
+
+      for (const pattern of NET_REVENUE_PATTERNS) {
+        if (pattern.labels.some(label => cellText.includes(label))) {
+          candidates.push({ row: r, priority: pattern.priority });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].row;
+}
+
+/**
  * Apply deductions as a percentage of gross revenue to each projected column.
- * Deductions = Revenue × (deductionsPercent / 100), stored as negative value.
+ * Also computes Net Revenue = Gross Revenue + Deductions (deductions are negative).
  */
 export function applyDeductionsProjection(
   data: SpreadsheetData,
@@ -281,6 +319,7 @@ export function applyDeductionsProjection(
 ): SpreadsheetData {
   const revenueRow = findRevenueRow(data);
   const deductionsRow = findDeductionsRow(data);
+  const netRevenueRow = findNetRevenueRow(data);
 
   if (revenueRow === null || deductionsRow === null) {
     return data;
@@ -298,9 +337,14 @@ export function applyDeductionsProjection(
     const revenue = typeof revenueVal === 'number' ? revenueVal : parseFloat(String(revenueVal));
     if (isNaN(revenue)) continue;
 
-    // Deductions are typically negative in a DRE
+    // Deductions are negative in a DRE
     const deduction = Math.round(revenue * rate * 100) / 100;
     newValues[deductionsRow][c] = -deduction;
+
+    // Net Revenue = Gross Revenue + Deductions (deductions already negative)
+    if (netRevenueRow !== null) {
+      newValues[netRevenueRow][c] = Math.round((revenue - deduction) * 100) / 100;
+    }
   }
 
   return {
