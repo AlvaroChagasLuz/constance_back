@@ -369,6 +369,16 @@ const GROSS_PROFIT_PATTERNS: { labels: string[]; priority: number }[] = [
   { labels: ['lucro bruto', 'gross profit'], priority: 1 },
 ];
 
+const SGA_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['despesas operacionais', 'operating expenses', 'sg&a', 'sga'], priority: 1 },
+  { labels: ['despesas', 'expenses'], priority: 2 },
+];
+
+const EBITDA_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['ebitda'], priority: 1 },
+  { labels: ['lucro operacional', 'operating profit', 'resultado operacional'], priority: 2 },
+];
+
 function findRowByPatterns(data: SpreadsheetData, patterns: { labels: string[]; priority: number }[]): number | null {
   const maxLabelCols = Math.min(5, data.colCount);
   const candidates: { row: number; priority: number }[] = [];
@@ -403,6 +413,76 @@ export function findCOGSRow(data: SpreadsheetData): number | null {
 
 export function findGrossProfitRow(data: SpreadsheetData): number | null {
   return findRowByPatterns(data, GROSS_PROFIT_PATTERNS);
+}
+
+export function findSGARow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, SGA_PATTERNS);
+}
+
+export function findEBITDARow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, EBITDA_PATTERNS);
+}
+
+/**
+ * Get the projected Gross Profit value for the first projection column.
+ */
+export function getProjectedGrossProfit(data: SpreadsheetData, originalColCount: number): number | null {
+  const grossProfitRow = findGrossProfitRow(data);
+  if (grossProfitRow === null) return null;
+
+  const firstProjCol = originalColCount;
+  if (firstProjCol >= data.colCount) return null;
+
+  const val = data.values[grossProfitRow]?.[firstProjCol];
+  if (val == null) return null;
+
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Apply SGA as a percentage of Gross Profit to each projected column.
+ * Also computes EBITDA = Gross Profit - SGA.
+ */
+export function applySGAProjection(
+  data: SpreadsheetData,
+  sgaPercent: number,
+  originalColCount: number
+): SpreadsheetData {
+  const grossProfitRow = findGrossProfitRow(data);
+  const sgaRow = findSGARow(data);
+  const ebitdaRow = findEBITDARow(data);
+
+  if (grossProfitRow === null || sgaRow === null) {
+    return data;
+  }
+
+  const newValues = data.values.map(row => [...row]);
+  const rate = sgaPercent / 100;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const gpVal = newValues[grossProfitRow][c];
+    if (gpVal == null) continue;
+
+    const gp = typeof gpVal === 'number' ? gpVal : parseFloat(String(gpVal));
+    if (isNaN(gp)) continue;
+
+    const sga = Math.round(gp * rate * 100) / 100;
+    newValues[sgaRow][c] = -sga;
+
+    if (ebitdaRow !== null) {
+      newValues[ebitdaRow][c] = Math.round((gp - sga) * 100) / 100;
+    }
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
 }
 
 /**
