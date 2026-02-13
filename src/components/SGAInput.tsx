@@ -4,36 +4,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 interface SGAInputProps {
-  grossProfit: number | null;
   onBack?: () => void;
   onContinue?: (sgaPercent: number) => void;
 }
 
-function formatBRL(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 export const SGAInput: React.FC<SGAInputProps> = ({
-  grossProfit,
   onBack,
   onContinue,
 }) => {
   const [sgaStr, setSgaStr] = useState<string>('');
   const [touched, setTouched] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const parsedValue = useMemo(() => {
     if (!sgaStr.trim()) return null;
@@ -44,25 +26,8 @@ export const SGAInput: React.FC<SGAInputProps> = ({
   const isValid = parsedValue !== null && parsedValue >= 0 && parsedValue <= 100;
   const showError = touched && !isValid && sgaStr.trim() !== '';
 
-  const sgaValue = useMemo(() => {
-    if (!isValid || parsedValue === null || grossProfit === null) return null;
-    return grossProfit * (parsedValue / 100);
-  }, [isValid, parsedValue, grossProfit]);
-
-  const ebitda = useMemo(() => {
-    if (sgaValue === null || grossProfit === null) return null;
-    return grossProfit - sgaValue;
-  }, [sgaValue, grossProfit]);
-
   const handleContinue = () => {
     if (isValid && parsedValue !== null) {
-      setShowConfirm(true);
-    }
-  };
-
-  const handleConfirm = () => {
-    if (isValid && parsedValue !== null) {
-      setShowConfirm(false);
       onContinue?.(parsedValue);
     }
   };
@@ -124,24 +89,6 @@ export const SGAInput: React.FC<SGAInputProps> = ({
           )}
         </div>
 
-        {/* Preview card */}
-        {grossProfit !== null && isValid && sgaValue !== null && ebitda !== null && (
-          <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Lucro Bruto</span>
-              <span className="font-medium text-foreground">R$ {formatBRL(grossProfit)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">(−) Despesas (SG&A)</span>
-              <span className="font-medium text-destructive">R$ {formatBRL(sgaValue)}</span>
-            </div>
-            <div className="border-t border-border pt-2 flex justify-between">
-              <span className="font-medium text-foreground">(=) EBITDA</span>
-              <span className="font-semibold text-foreground">R$ {formatBRL(ebitda)}</span>
-            </div>
-          </div>
-        )}
-
         {/* Buttons */}
         <div className="w-full flex flex-col gap-2">
           <Button
@@ -149,7 +96,7 @@ export const SGAInput: React.FC<SGAInputProps> = ({
             disabled={!isValid}
             className="w-full gap-2"
           >
-            Confirmar e Continuar
+            Continuar
             <ArrowRight className="w-4 h-4" />
           </Button>
           <Button
@@ -162,46 +109,6 @@ export const SGAInput: React.FC<SGAInputProps> = ({
           </Button>
         </div>
       </div>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Despesas (SG&A)</DialogTitle>
-            <DialogDescription>
-              Confirma o percentual de despesas informado? Você poderá alterar esse valor posteriormente.
-            </DialogDescription>
-          </DialogHeader>
-          {grossProfit !== null && sgaValue !== null && ebitda !== null && parsedValue !== null && (
-            <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Lucro Bruto</span>
-                <span className="font-medium text-foreground">R$ {formatBRL(grossProfit)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">% de Despesas</span>
-                <span className="font-medium text-foreground">{parsedValue.toLocaleString('pt-BR')}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">(−) Despesas (SG&A)</span>
-                <span className="font-medium text-destructive">R$ {formatBRL(sgaValue)}</span>
-              </div>
-              <div className="border-t border-border pt-2 flex justify-between">
-                <span className="font-medium text-foreground">(=) EBITDA</span>
-                <span className="font-semibold text-foreground">R$ {formatBRL(ebitda)}</span>
-              </div>
-            </div>
-          )}
-          <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowConfirm(false)}>
-              Editar
-            </Button>
-            <Button onClick={handleConfirm}>
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
