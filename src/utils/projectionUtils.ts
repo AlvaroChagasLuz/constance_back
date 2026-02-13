@@ -356,3 +356,115 @@ export function applyDeductionsProjection(
     rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
   };
 }
+
+/**
+ * COGS / Gross Profit label patterns.
+ */
+const COGS_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['cmv', 'cogs', 'custo da mercadoria', 'custo das mercadorias', 'custo dos produtos', 'cost of goods'], priority: 1 },
+  { labels: ['custo', 'cost'], priority: 2 },
+];
+
+const GROSS_PROFIT_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['lucro bruto', 'gross profit'], priority: 1 },
+];
+
+function findRowByPatterns(data: SpreadsheetData, patterns: { labels: string[]; priority: number }[]): number | null {
+  const maxLabelCols = Math.min(5, data.colCount);
+  const candidates: { row: number; priority: number }[] = [];
+
+  for (let r = 0; r < data.values.length; r++) {
+    const row = data.values[r];
+    if (!row) continue;
+
+    for (let c = 0; c < maxLabelCols; c++) {
+      const val = row[c];
+      if (val == null) continue;
+
+      const cellText = String(val).trim().toLowerCase();
+      if (!cellText) continue;
+
+      for (const pattern of patterns) {
+        if (pattern.labels.some(label => cellText.includes(label))) {
+          candidates.push({ row: r, priority: pattern.priority });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].row;
+}
+
+export function findCOGSRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, COGS_PATTERNS);
+}
+
+export function findGrossProfitRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, GROSS_PROFIT_PATTERNS);
+}
+
+/**
+ * Get the projected Net Revenue value for the first projection column.
+ * Used to display the preview in the COGS input screen.
+ */
+export function getProjectedNetRevenue(data: SpreadsheetData, originalColCount: number): number | null {
+  const netRevenueRow = findNetRevenueRow(data);
+  if (netRevenueRow === null) return null;
+
+  // Take the first projected column value
+  const firstProjCol = originalColCount;
+  if (firstProjCol >= data.colCount) return null;
+
+  const val = data.values[netRevenueRow]?.[firstProjCol];
+  if (val == null) return null;
+
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Apply COGS as a percentage of Net Revenue to each projected column.
+ * Also computes Gross Profit = Net Revenue - COGS.
+ */
+export function applyCOGSProjection(
+  data: SpreadsheetData,
+  cogsPercent: number,
+  originalColCount: number
+): SpreadsheetData {
+  const netRevenueRow = findNetRevenueRow(data);
+  const cogsRow = findCOGSRow(data);
+  const grossProfitRow = findGrossProfitRow(data);
+
+  if (netRevenueRow === null || cogsRow === null) {
+    return data;
+  }
+
+  const newValues = data.values.map(row => [...row]);
+  const rate = cogsPercent / 100;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const netRevVal = newValues[netRevenueRow][c];
+    if (netRevVal == null) continue;
+
+    const netRevenue = typeof netRevVal === 'number' ? netRevVal : parseFloat(String(netRevVal));
+    if (isNaN(netRevenue)) continue;
+
+    const cogs = Math.round(netRevenue * rate * 100) / 100;
+    newValues[cogsRow][c] = -cogs;
+
+    if (grossProfitRow !== null) {
+      newValues[grossProfitRow][c] = Math.round((netRevenue - cogs) * 100) / 100;
+    }
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
+}

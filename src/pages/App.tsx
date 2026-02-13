@@ -7,13 +7,14 @@ import { ConfirmationBanner } from '@/components/ConfirmationBanner';
 import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection } from '@/utils/projectionUtils';
+import { COGSInput } from '@/components/COGSInput';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, getProjectedNetRevenue } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -140,11 +141,10 @@ const Index = () => {
     setStep('assumptions');
   }, []);
 
-  // Step 6b: Continue from deductions — apply deductions to grid
+  // Step 6b: Continue from deductions — apply deductions to grid, advance to COGS
   const handleDeductionsContinue = useCallback((deductionsPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    // Apply deductions projection to the spreadsheet
     const updated = applyDeductionsProjection(rightSpreadsheetData, deductionsPercent, originalColCount);
     setRightSpreadsheetData(updated);
 
@@ -161,9 +161,42 @@ const Index = () => {
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
+    setStep('cogs');
+
     toast({
       title: 'Deduções aplicadas!',
       description: `${deductionsPercent}% de deduções projetadas em todas as colunas.`,
+    });
+  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // Step 7a: Back from COGS to deductions
+  const handleCOGSBack = useCallback(() => {
+    setStep('deductions');
+  }, []);
+
+  // Step 7b: Continue from COGS — apply COGS to grid
+  const handleCOGSContinue = useCallback((cogsPercent: number) => {
+    if (!rightSpreadsheetData) return;
+
+    const updated = applyCOGSProjection(rightSpreadsheetData, cogsPercent, originalColCount);
+    setRightSpreadsheetData(updated);
+
+    // Update assumptions entries
+    const newEntries: AssumptionEntry[] = [
+      ...assumptionEntries.filter(e => e.label !== 'Custo (CMV) sobre Receita Líquida'),
+      {
+        category: 'Custos',
+        label: 'Custo (CMV) sobre Receita Líquida',
+        value: cogsPercent,
+        unit: '% da Receita Líquida',
+      },
+    ];
+    setAssumptionEntries(newEntries);
+    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
+
+    toast({
+      title: 'Custos aplicados!',
+      description: `${cogsPercent}% de CMV projetado sobre a receita líquida.`,
     });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
@@ -176,6 +209,8 @@ const Index = () => {
         return { label: 'Premissas de Projeção', Icon: BarChart3 };
       case 'deductions':
         return { label: 'Deduções de Receita', Icon: BarChart3 };
+      case 'cogs':
+        return { label: 'Custo (CMV)', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -197,6 +232,16 @@ const Index = () => {
             onContinue={handleDeductionsContinue}
           />
         );
+      case 'cogs': {
+        const netRev = rightSpreadsheetData ? getProjectedNetRevenue(rightSpreadsheetData, originalColCount) : null;
+        return (
+          <COGSInput
+            netRevenue={netRev}
+            onBack={handleCOGSBack}
+            onContinue={handleCOGSContinue}
+          />
+        );
+      }
       default:
         return (
           <ExcelUpload
@@ -216,6 +261,8 @@ const Index = () => {
         return 'Colunas projetadas — Defina as premissas';
       case 'deductions':
         return 'Receita projetada — Defina as deduções';
+      case 'cogs':
+        return 'Deduções aplicadas — Defina o custo (CMV)';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
