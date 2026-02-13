@@ -8,7 +8,7 @@ import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, getProjectedNetRevenue } from '@/utils/projectionUtils';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
@@ -232,16 +232,13 @@ const Index = () => {
             onContinue={handleDeductionsContinue}
           />
         );
-      case 'cogs': {
-        const netRev = rightSpreadsheetData ? getProjectedNetRevenue(rightSpreadsheetData, originalColCount) : null;
+      case 'cogs':
         return (
           <COGSInput
-            netRevenue={netRev}
             onBack={handleCOGSBack}
             onContinue={handleCOGSContinue}
           />
         );
-      }
       default:
         return (
           <ExcelUpload
