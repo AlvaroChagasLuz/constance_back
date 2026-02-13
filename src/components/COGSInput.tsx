@@ -6,20 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface COGSInputProps {
-  netRevenue: number | null;
   onBack?: () => void;
   onContinue?: (cogsPercent: number) => void;
 }
 
-function formatBRL(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 export const COGSInput: React.FC<COGSInputProps> = ({
-  netRevenue,
   onBack,
   onContinue,
 }) => {
@@ -34,16 +25,6 @@ export const COGSInput: React.FC<COGSInputProps> = ({
 
   const isValid = parsedValue !== null && parsedValue >= 0 && parsedValue <= 100;
   const showError = touched && !isValid && cogsStr.trim() !== '';
-
-  const cogsValue = useMemo(() => {
-    if (!isValid || parsedValue === null || netRevenue === null) return null;
-    return netRevenue * (parsedValue / 100);
-  }, [isValid, parsedValue, netRevenue]);
-
-  const grossProfit = useMemo(() => {
-    if (cogsValue === null || netRevenue === null) return null;
-    return netRevenue - cogsValue;
-  }, [cogsValue, netRevenue]);
 
   const handleContinue = () => {
     if (isValid && parsedValue !== null) {
@@ -108,24 +89,6 @@ export const COGSInput: React.FC<COGSInputProps> = ({
           )}
         </div>
 
-        {/* Preview card */}
-        {netRevenue !== null && isValid && cogsValue !== null && grossProfit !== null && (
-          <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Receita Líquida</span>
-              <span className="font-medium text-foreground">R$ {formatBRL(netRevenue)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">(−) Custo (CMV)</span>
-              <span className="font-medium text-destructive">R$ {formatBRL(cogsValue)}</span>
-            </div>
-            <div className="border-t border-border pt-2 flex justify-between">
-              <span className="font-medium text-foreground">(=) Lucro Bruto</span>
-              <span className="font-semibold text-foreground">R$ {formatBRL(grossProfit)}</span>
-            </div>
-          </div>
-        )}
-
         {/* Buttons */}
         <div className="w-full flex flex-col gap-2">
           <Button
@@ -133,7 +96,7 @@ export const COGSInput: React.FC<COGSInputProps> = ({
             disabled={!isValid}
             className="w-full gap-2"
           >
-            Confirmar e Continuar
+            Continuar
             <ArrowRight className="w-4 h-4" />
           </Button>
           <Button
