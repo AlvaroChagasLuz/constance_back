@@ -8,13 +8,14 @@ import { FinancialModellingPanel } from '@/components/FinancialModellingPanel';
 import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection } from '@/utils/projectionUtils';
+import { SGAInput } from '@/components/SGAInput';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, getProjectedGrossProfit } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -194,9 +195,41 @@ const Index = () => {
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
+    setStep('sga');
+
     toast({
       title: 'Custos aplicados!',
       description: `${cogsPercent}% de CMV projetado sobre a receita líquida.`,
+    });
+  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // Step 8a: Back from SGA to COGS
+  const handleSGABack = useCallback(() => {
+    setStep('cogs');
+  }, []);
+
+  // Step 8b: Continue from SGA — apply SGA to grid
+  const handleSGAContinue = useCallback((sgaPercent: number) => {
+    if (!rightSpreadsheetData) return;
+
+    const updated = applySGAProjection(rightSpreadsheetData, sgaPercent, originalColCount);
+    setRightSpreadsheetData(updated);
+
+    const newEntries: AssumptionEntry[] = [
+      ...assumptionEntries.filter(e => e.label !== 'Despesas (SG&A) sobre Lucro Bruto'),
+      {
+        category: 'Despesas',
+        label: 'Despesas (SG&A) sobre Lucro Bruto',
+        value: sgaPercent,
+        unit: '% do Lucro Bruto',
+      },
+    ];
+    setAssumptionEntries(newEntries);
+    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
+
+    toast({
+      title: 'Despesas aplicadas!',
+      description: `${sgaPercent}% de SG&A projetado sobre o lucro bruto.`,
     });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
@@ -211,6 +244,8 @@ const Index = () => {
         return { label: 'Deduções de Receita', Icon: BarChart3 };
       case 'cogs':
         return { label: 'Custo (CMV)', Icon: BarChart3 };
+      case 'sga':
+        return { label: 'Despesas (SG&A)', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -239,6 +274,16 @@ const Index = () => {
             onContinue={handleCOGSContinue}
           />
         );
+      case 'sga': {
+        const gp = rightSpreadsheetData ? getProjectedGrossProfit(rightSpreadsheetData, originalColCount) : null;
+        return (
+          <SGAInput
+            grossProfit={gp}
+            onBack={handleSGABack}
+            onContinue={handleSGAContinue}
+          />
+        );
+      }
       default:
         return (
           <ExcelUpload
@@ -260,6 +305,8 @@ const Index = () => {
         return 'Receita projetada — Defina as deduções';
       case 'cogs':
         return 'Deduções aplicadas — Defina o custo (CMV)';
+      case 'sga':
+        return 'Custos aplicados — Defina as despesas (SG&A)';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
