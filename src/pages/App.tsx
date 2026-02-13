@@ -9,7 +9,7 @@ import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
 import { SGAInput } from '@/components/SGAInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, getProjectedGrossProfit } from '@/utils/projectionUtils';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
@@ -274,16 +274,13 @@ const Index = () => {
             onContinue={handleCOGSContinue}
           />
         );
-      case 'sga': {
-        const gp = rightSpreadsheetData ? getProjectedGrossProfit(rightSpreadsheetData, originalColCount) : null;
+      case 'sga':
         return (
           <SGAInput
-            grossProfit={gp}
             onBack={handleSGABack}
             onContinue={handleSGAContinue}
           />
         );
-      }
       default:
         return (
           <ExcelUpload
