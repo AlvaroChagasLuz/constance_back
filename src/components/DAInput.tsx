@@ -4,40 +4,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 interface DAInputProps {
-  netRevenue: number | null;
-  ebitda: number | null;
   onBack?: () => void;
   onContinue?: (daPercent: number) => void;
 }
 
-const formatBRL = (value: number): string => {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-};
-
 export const DAInput: React.FC<DAInputProps> = ({
-  netRevenue,
-  ebitda,
   onBack,
   onContinue,
 }) => {
   const [daStr, setDaStr] = useState<string>('');
   const [touched, setTouched] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const parsedValue = useMemo(() => {
     if (!daStr.trim()) return null;
@@ -48,25 +26,8 @@ export const DAInput: React.FC<DAInputProps> = ({
   const isValid = parsedValue !== null && parsedValue >= 0 && parsedValue <= 100;
   const showError = touched && !isValid && daStr.trim() !== '';
 
-  const daValue = useMemo(() => {
-    if (!isValid || parsedValue === null || netRevenue === null) return null;
-    return Math.round(netRevenue * (parsedValue / 100) * 100) / 100;
-  }, [isValid, parsedValue, netRevenue]);
-
-  const ebitValue = useMemo(() => {
-    if (daValue === null || ebitda === null) return null;
-    return Math.round((ebitda - daValue) * 100) / 100;
-  }, [daValue, ebitda]);
-
   const handleContinue = () => {
     if (isValid && parsedValue !== null) {
-      setShowConfirmDialog(true);
-    }
-  };
-
-  const handleConfirm = () => {
-    setShowConfirmDialog(false);
-    if (parsedValue !== null) {
       onContinue?.(parsedValue);
     }
   };
@@ -128,30 +89,6 @@ export const DAInput: React.FC<DAInputProps> = ({
           )}
         </div>
 
-        {/* Preview Card */}
-        {isValid && netRevenue !== null && ebitda !== null && daValue !== null && ebitValue !== null && (
-          <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Receita Líquida</span>
-              <span className="font-medium text-foreground">{formatBRL(netRevenue)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">EBITDA</span>
-              <span className="font-medium text-foreground">{formatBRL(ebitda)}</span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">(−) D&A ({parsedValue}%)</span>
-              <span className="font-medium text-destructive">−{formatBRL(daValue)}</span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between">
-              <span className="font-semibold text-foreground">(=) EBIT</span>
-              <span className="font-semibold text-foreground">{formatBRL(ebitValue)}</span>
-            </div>
-          </div>
-        )}
-
         {/* Buttons */}
         <div className="w-full flex flex-col gap-2">
           <Button
@@ -159,7 +96,7 @@ export const DAInput: React.FC<DAInputProps> = ({
             disabled={!isValid}
             className="w-full gap-2"
           >
-            Confirmar e Continuar
+            Continuar
             <ArrowRight className="w-4 h-4" />
           </Button>
           <Button
@@ -172,49 +109,6 @@ export const DAInput: React.FC<DAInputProps> = ({
           </Button>
         </div>
       </div>
-
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Depreciação e Amortização</DialogTitle>
-            <DialogDescription>
-              Confirma o percentual de Depreciação e Amortização informado? Você poderá alterar esse valor posteriormente.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Receita Líquida</span>
-              <span className="font-medium text-foreground">{netRevenue !== null ? formatBRL(netRevenue) : '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">EBITDA</span>
-              <span className="font-medium text-foreground">{ebitda !== null ? formatBRL(ebitda) : '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">% de D&A</span>
-              <span className="font-medium text-foreground">{parsedValue}%</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">(−) D&A (R$)</span>
-              <span className="font-medium text-destructive">{daValue !== null ? `−${formatBRL(daValue)}` : '—'}</span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between">
-              <span className="font-semibold text-foreground">(=) EBIT</span>
-              <span className="font-semibold text-foreground">{ebitValue !== null ? formatBRL(ebitValue) : '—'}</span>
-            </div>
-          </div>
-          <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowConfirmDialog(false)}>
-              Editar
-            </Button>
-            <Button onClick={handleConfirm}>
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
