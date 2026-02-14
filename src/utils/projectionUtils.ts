@@ -494,16 +494,48 @@ const DA_PATTERNS: { labels: string[]; priority: number }[] = [
 ];
 
 const EBIT_PATTERNS: { labels: string[]; priority: number }[] = [
-  { labels: ['ebit'], priority: 1 },
-  { labels: ['lucro antes de juros', 'earnings before interest'], priority: 2 },
+  { labels: ['lucro antes de juros', 'earnings before interest'], priority: 1 },
+  { labels: ['resultado antes', 'lucro operacional líquido'], priority: 2 },
 ];
 
 export function findDARow(data: SpreadsheetData): number | null {
   return findRowByPatterns(data, DA_PATTERNS);
 }
 
+/**
+ * Find the EBIT row. Uses special logic to match "ebit" but NOT "ebitda".
+ */
 export function findEBITRow(data: SpreadsheetData): number | null {
-  return findRowByPatterns(data, EBIT_PATTERNS);
+  const maxLabelCols = Math.min(5, data.colCount);
+  const candidates: { row: number; priority: number }[] = [];
+
+  for (let r = 0; r < data.values.length; r++) {
+    const row = data.values[r];
+    if (!row) continue;
+
+    for (let c = 0; c < maxLabelCols; c++) {
+      const val = row[c];
+      if (val == null) continue;
+
+      const cellText = String(val).trim().toLowerCase();
+      if (!cellText) continue;
+
+      // Check for exact "ebit" (not "ebitda")
+      if (/\bebit\b/i.test(cellText) && !cellText.includes('ebitda')) {
+        candidates.push({ row: r, priority: 1 });
+      }
+
+      for (const pattern of EBIT_PATTERNS) {
+        if (pattern.labels.some(label => cellText.includes(label))) {
+          candidates.push({ row: r, priority: pattern.priority });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].row;
 }
 
 /**
