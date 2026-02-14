@@ -9,13 +9,14 @@ import { ProjectionAssumptions } from '@/components/ProjectionAssumptions';
 import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
 import { SGAInput } from '@/components/SGAInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection } from '@/utils/projectionUtils';
+import { DAInput } from '@/components/DAInput';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, getProjectedNetRevenue, getProjectedEBITDA } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -208,7 +209,7 @@ const Index = () => {
     setStep('cogs');
   }, []);
 
-  // Step 8b: Continue from SGA — apply SGA to grid
+  // Step 8b: Continue from SGA — apply SGA to grid, advance to D&A
   const handleSGAContinue = useCallback((sgaPercent: number) => {
     if (!rightSpreadsheetData) return;
 
@@ -227,9 +228,41 @@ const Index = () => {
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
+    setStep('da');
+
     toast({
       title: 'Despesas aplicadas!',
       description: `${sgaPercent}% de SG&A projetado sobre o lucro bruto.`,
+    });
+  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // Step 9a: Back from D&A to SGA
+  const handleDABack = useCallback(() => {
+    setStep('sga');
+  }, []);
+
+  // Step 9b: Continue from D&A — apply D&A to grid
+  const handleDAContinue = useCallback((daPercent: number) => {
+    if (!rightSpreadsheetData) return;
+
+    const updated = applyDAProjection(rightSpreadsheetData, daPercent, originalColCount);
+    setRightSpreadsheetData(updated);
+
+    const newEntries: AssumptionEntry[] = [
+      ...assumptionEntries.filter(e => e.label !== 'D&A sobre Receita Líquida'),
+      {
+        category: 'D&A',
+        label: 'D&A sobre Receita Líquida',
+        value: daPercent,
+        unit: '% da Receita Líquida',
+      },
+    ];
+    setAssumptionEntries(newEntries);
+    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
+
+    toast({
+      title: 'D&A aplicada!',
+      description: `${daPercent}% de D&A projetado sobre a receita líquida.`,
     });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
@@ -246,6 +279,8 @@ const Index = () => {
         return { label: 'Custo (CMV)', Icon: BarChart3 };
       case 'sga':
         return { label: 'Despesas (SG&A)', Icon: BarChart3 };
+      case 'da':
+        return { label: 'D&A', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -281,6 +316,15 @@ const Index = () => {
             onContinue={handleSGAContinue}
           />
         );
+      case 'da':
+        return (
+          <DAInput
+            netRevenue={rightSpreadsheetData ? getProjectedNetRevenue(rightSpreadsheetData, originalColCount) : null}
+            ebitda={rightSpreadsheetData ? getProjectedEBITDA(rightSpreadsheetData, originalColCount) : null}
+            onBack={handleDABack}
+            onContinue={handleDAContinue}
+          />
+        );
       default:
         return (
           <ExcelUpload
@@ -304,6 +348,8 @@ const Index = () => {
         return 'Deduções aplicadas — Defina o custo (CMV)';
       case 'sga':
         return 'Custos aplicados — Defina as despesas (SG&A)';
+      case 'da':
+        return 'Despesas aplicadas — Defina a D&A';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`

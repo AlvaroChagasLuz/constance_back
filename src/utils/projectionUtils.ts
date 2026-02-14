@@ -486,14 +486,33 @@ export function applySGAProjection(
 }
 
 /**
+ * D&A / EBIT label patterns.
+ */
+const DA_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['depreciação e amortização', 'depreciation and amortization', 'd&a'], priority: 1 },
+  { labels: ['depreciação', 'depreciation', 'amortização', 'amortization'], priority: 2 },
+];
+
+const EBIT_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['ebit'], priority: 1 },
+  { labels: ['lucro antes de juros', 'earnings before interest'], priority: 2 },
+];
+
+export function findDARow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, DA_PATTERNS);
+}
+
+export function findEBITRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, EBIT_PATTERNS);
+}
+
+/**
  * Get the projected Net Revenue value for the first projection column.
- * Used to display the preview in the COGS input screen.
  */
 export function getProjectedNetRevenue(data: SpreadsheetData, originalColCount: number): number | null {
   const netRevenueRow = findNetRevenueRow(data);
   if (netRevenueRow === null) return null;
 
-  // Take the first projected column value
   const firstProjCol = originalColCount;
   if (firstProjCol >= data.colCount) return null;
 
@@ -502,6 +521,75 @@ export function getProjectedNetRevenue(data: SpreadsheetData, originalColCount: 
 
   const num = typeof val === 'number' ? val : parseFloat(String(val));
   return isNaN(num) ? null : num;
+}
+
+/**
+ * Get the projected EBITDA value for the first projection column.
+ */
+export function getProjectedEBITDA(data: SpreadsheetData, originalColCount: number): number | null {
+  const ebitdaRow = findEBITDARow(data);
+  if (ebitdaRow === null) return null;
+
+  const firstProjCol = originalColCount;
+  if (firstProjCol >= data.colCount) return null;
+
+  const val = data.values[ebitdaRow]?.[firstProjCol];
+  if (val == null) return null;
+
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Apply D&A as a percentage of Net Revenue to each projected column.
+ * Also computes EBIT = EBITDA - D&A.
+ */
+export function applyDAProjection(
+  data: SpreadsheetData,
+  daPercent: number,
+  originalColCount: number
+): SpreadsheetData {
+  const netRevenueRow = findNetRevenueRow(data);
+  const daRow = findDARow(data);
+  const ebitdaRow = findEBITDARow(data);
+  const ebitRow = findEBITRow(data);
+
+  if (netRevenueRow === null || daRow === null) {
+    return data;
+  }
+
+  const newValues = data.values.map(row => [...row]);
+  const rate = daPercent / 100;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const netRevVal = newValues[netRevenueRow][c];
+    if (netRevVal == null) continue;
+
+    const netRevenue = typeof netRevVal === 'number' ? netRevVal : parseFloat(String(netRevVal));
+    if (isNaN(netRevenue)) continue;
+
+    const da = Math.round(netRevenue * rate * 100) / 100;
+    newValues[daRow][c] = -da;
+
+    if (ebitRow !== null && ebitdaRow !== null) {
+      const ebitdaVal = newValues[ebitdaRow][c];
+      if (ebitdaVal != null) {
+        const ebitda = typeof ebitdaVal === 'number' ? ebitdaVal : parseFloat(String(ebitdaVal));
+        if (!isNaN(ebitda)) {
+          newValues[ebitRow][c] = Math.round((ebitda - da) * 100) / 100;
+        }
+      }
+    }
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
 }
 
 /**
