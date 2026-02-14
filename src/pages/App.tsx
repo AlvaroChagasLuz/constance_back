@@ -10,7 +10,7 @@ import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
 import { SGAInput } from '@/components/SGAInput';
 import { DAInput } from '@/components/DAInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, getProjectedNetRevenue, getProjectedEBITDA } from '@/utils/projectionUtils';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
@@ -319,8 +319,6 @@ const Index = () => {
       case 'da':
         return (
           <DAInput
-            netRevenue={rightSpreadsheetData ? getProjectedNetRevenue(rightSpreadsheetData, originalColCount) : null}
-            ebitda={rightSpreadsheetData ? getProjectedEBITDA(rightSpreadsheetData, originalColCount) : null}
             onBack={handleDABack}
             onContinue={handleDAContinue}
           />
