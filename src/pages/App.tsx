@@ -10,13 +10,14 @@ import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
 import { SGAInput } from '@/components/SGAInput';
 import { DAInput } from '@/components/DAInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection } from '@/utils/projectionUtils';
+import { EBITDisplay } from '@/components/EBITDisplay';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, getProjectedEBITDA, getProjectedNetRevenue } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'ebit';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -241,7 +242,7 @@ const Index = () => {
     setStep('sga');
   }, []);
 
-  // Step 9b: Continue from D&A — apply D&A to grid
+  // Step 9b: Continue from D&A — apply D&A to grid, advance to EBIT
   const handleDAContinue = useCallback((daPercent: number) => {
     if (!rightSpreadsheetData) return;
 
@@ -260,11 +261,26 @@ const Index = () => {
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
+    setStep('ebit');
+
     toast({
       title: 'D&A aplicada!',
       description: `${daPercent}% de D&A projetado sobre a receita líquida.`,
     });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // Step 10a: Back from EBIT to D&A
+  const handleEBITBack = useCallback(() => {
+    setStep('da');
+  }, []);
+
+  // Step 10b: Continue from EBIT — advance to next step
+  const handleEBITContinue = useCallback(() => {
+    toast({
+      title: 'EBIT confirmado!',
+      description: 'Avançando para a próxima etapa.',
+    });
+  }, [toast]);
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {
@@ -281,6 +297,8 @@ const Index = () => {
         return { label: 'Despesas (SG&A)', Icon: BarChart3 };
       case 'da':
         return { label: 'D&A', Icon: BarChart3 };
+      case 'ebit':
+        return { label: 'EBIT', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -323,6 +341,23 @@ const Index = () => {
             onContinue={handleDAContinue}
           />
         );
+      case 'ebit':
+        return (
+          <EBITDisplay
+            ebitda={rightSpreadsheetData ? getProjectedEBITDA(rightSpreadsheetData, originalColCount) : null}
+            da={(() => {
+              if (!rightSpreadsheetData) return null;
+              const nr = getProjectedNetRevenue(rightSpreadsheetData, originalColCount);
+              const ebitda = getProjectedEBITDA(rightSpreadsheetData, originalColCount);
+              if (nr === null || ebitda === null) return null;
+              const daEntry = assumptionEntries.find(e => e.label === 'D&A sobre Receita Líquida');
+              if (!daEntry) return null;
+              return Math.round(nr * (daEntry.value / 100) * 100) / 100;
+            })()}
+            onBack={handleEBITBack}
+            onContinue={handleEBITContinue}
+          />
+        );
       default:
         return (
           <ExcelUpload
@@ -348,6 +383,8 @@ const Index = () => {
         return 'Custos aplicados — Defina as despesas (SG&A)';
       case 'da':
         return 'Despesas aplicadas — Defina a D&A';
+      case 'ebit':
+        return 'D&A aplicada — Confirme o EBIT';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
