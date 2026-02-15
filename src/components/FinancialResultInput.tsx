@@ -132,15 +132,15 @@ export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
         </div>
 
         {/* Real-time preview */}
-        {isValid && netRevenue !== null && ebit !== null && (
+        {isValid && (
           <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Receita Líquida</span>
-              <span className="font-medium text-foreground">{formatBRL(netRevenue)}</span>
+              <span className="font-medium text-foreground">{netRevenue !== null ? formatBRL(netRevenue) : '—'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">EBIT</span>
-              <span className="font-medium text-foreground">{formatBRL(ebit)}</span>
+              <span className="font-medium text-foreground">{ebit !== null ? formatBRL(ebit) : '—'}</span>
             </div>
             <div className="border-t border-border my-1" />
             <div className="flex justify-between">
