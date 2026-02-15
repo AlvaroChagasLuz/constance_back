@@ -625,6 +625,96 @@ export function applyDAProjection(
 }
 
 /**
+ * Financial Result / EBT label patterns.
+ */
+const FINANCIAL_RESULT_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['resultado financeiro', 'financial result', 'financial revenue'], priority: 1 },
+  { labels: ['receita financeira', 'despesa financeira'], priority: 2 },
+];
+
+const EBT_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['ebt', 'lucro antes do imposto', 'earnings before taxes'], priority: 1 },
+  { labels: ['lucro antes do ir', 'receita pré imposto'], priority: 2 },
+];
+
+export function findFinancialResultRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, FINANCIAL_RESULT_PATTERNS);
+}
+
+export function findEBTRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, EBT_PATTERNS);
+}
+
+/**
+ * Get the projected EBIT value for the first projection column.
+ */
+export function getProjectedEBIT(data: SpreadsheetData, originalColCount: number): number | null {
+  const ebitRow = findEBITRow(data);
+  if (ebitRow === null) return null;
+
+  const firstProjCol = originalColCount;
+  if (firstProjCol >= data.colCount) return null;
+
+  const val = data.values[ebitRow]?.[firstProjCol];
+  if (val == null) return null;
+
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Apply Financial Result as a percentage of Net Revenue to each projected column.
+ * Also computes EBT = EBIT - Financial Result.
+ */
+export function applyFinancialResultProjection(
+  data: SpreadsheetData,
+  financialResultPercent: number,
+  originalColCount: number
+): SpreadsheetData {
+  const netRevenueRow = findNetRevenueRow(data);
+  const financialResultRow = findFinancialResultRow(data);
+  const ebitRow = findEBITRow(data);
+  const ebtRow = findEBTRow(data);
+
+  if (netRevenueRow === null || financialResultRow === null) {
+    return data;
+  }
+
+  const newValues = data.values.map(row => [...row]);
+  const rate = financialResultPercent / 100;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const netRevVal = newValues[netRevenueRow][c];
+    if (netRevVal == null) continue;
+
+    const netRevenue = typeof netRevVal === 'number' ? netRevVal : parseFloat(String(netRevVal));
+    if (isNaN(netRevenue)) continue;
+
+    const financialResult = Math.round(netRevenue * rate * 100) / 100;
+    newValues[financialResultRow][c] = -financialResult;
+
+    if (ebtRow !== null && ebitRow !== null) {
+      const ebitVal = newValues[ebitRow][c];
+      if (ebitVal != null) {
+        const ebitNum = typeof ebitVal === 'number' ? ebitVal : parseFloat(String(ebitVal));
+        if (!isNaN(ebitNum)) {
+          newValues[ebtRow][c] = Math.round((ebitNum - financialResult) * 100) / 100;
+        }
+      }
+    }
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
+}
+
+/**
  * Apply COGS as a percentage of Net Revenue to each projected column.
  * Also computes Gross Profit = Net Revenue - COGS.
  */
@@ -668,3 +758,4 @@ export function applyCOGSProjection(
     rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
   };
 }
+

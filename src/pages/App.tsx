@@ -10,13 +10,14 @@ import { RevenueDeductions } from '@/components/RevenueDeductions';
 import { COGSInput } from '@/components/COGSInput';
 import { SGAInput } from '@/components/SGAInput';
 import { DAInput } from '@/components/DAInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection } from '@/utils/projectionUtils';
+import { FinancialResultInput } from '@/components/FinancialResultInput';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, getProjectedNetRevenue, getProjectedEBIT } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -241,7 +242,7 @@ const Index = () => {
     setStep('sga');
   }, []);
 
-  // Step 9b: Continue from D&A — apply D&A to grid, advance to EBIT
+  // Step 9b: Continue from D&A — apply D&A to grid, advance to financial result
   const handleDAContinue = useCallback((daPercent: number) => {
     if (!rightSpreadsheetData) return;
 
@@ -260,9 +261,41 @@ const Index = () => {
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
+    setStep('financial_result');
+
     toast({
       title: 'D&A aplicada!',
       description: `${daPercent}% de D&A projetado sobre a receita líquida.`,
+    });
+  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // Step 10a: Back from Financial Result to D&A
+  const handleFinancialResultBack = useCallback(() => {
+    setStep('da');
+  }, []);
+
+  // Step 10b: Continue from Financial Result — apply to grid
+  const handleFinancialResultContinue = useCallback((financialResultPercent: number) => {
+    if (!rightSpreadsheetData) return;
+
+    const updated = applyFinancialResultProjection(rightSpreadsheetData, financialResultPercent, originalColCount);
+    setRightSpreadsheetData(updated);
+
+    const newEntries: AssumptionEntry[] = [
+      ...assumptionEntries.filter(e => e.label !== 'Resultado Financeiro sobre Receita Líquida'),
+      {
+        category: 'Resultado Financeiro',
+        label: 'Resultado Financeiro sobre Receita Líquida',
+        value: financialResultPercent,
+        unit: '% da Receita Líquida',
+      },
+    ];
+    setAssumptionEntries(newEntries);
+    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
+
+    toast({
+      title: 'Resultado Financeiro aplicado!',
+      description: `${financialResultPercent}% de resultado financeiro projetado sobre a receita líquida.`,
     });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
@@ -281,6 +314,8 @@ const Index = () => {
         return { label: 'Despesas (SG&A)', Icon: BarChart3 };
       case 'da':
         return { label: 'D&A', Icon: BarChart3 };
+      case 'financial_result':
+        return { label: 'Resultado Financeiro', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -323,6 +358,15 @@ const Index = () => {
             onContinue={handleDAContinue}
           />
         );
+      case 'financial_result':
+        return (
+          <FinancialResultInput
+            onBack={handleFinancialResultBack}
+            onContinue={handleFinancialResultContinue}
+            netRevenue={rightSpreadsheetData ? getProjectedNetRevenue(rightSpreadsheetData, originalColCount) : null}
+            ebit={rightSpreadsheetData ? getProjectedEBIT(rightSpreadsheetData, originalColCount) : null}
+          />
+        );
       default:
         return (
           <ExcelUpload
@@ -348,6 +392,8 @@ const Index = () => {
         return 'Custos aplicados — Defina as despesas (SG&A)';
       case 'da':
         return 'Despesas aplicadas — Defina a D&A';
+      case 'financial_result':
+        return 'D&A aplicada — Defina o Resultado Financeiro';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
