@@ -363,8 +363,6 @@ const Index = () => {
           <FinancialResultInput
             onBack={handleFinancialResultBack}
             onContinue={handleFinancialResultContinue}
-            netRevenue={rightSpreadsheetData ? getProjectedNetRevenue(rightSpreadsheetData, originalColCount) : null}
-            ebit={rightSpreadsheetData ? getProjectedEBIT(rightSpreadsheetData, originalColCount) : null}
           />
         );
       default:

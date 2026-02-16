@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { DollarSign, ArrowRight, ArrowLeft, HelpCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,47 +16,26 @@ import {
 interface FinancialResultInputProps {
   onBack?: () => void;
   onContinue?: (financialResultPercent: number) => void;
-  netRevenue: number | null;
-  ebit: number | null;
 }
 
-function formatBRL(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
 
 export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
   onBack,
   onContinue,
-  netRevenue,
-  ebit,
 }) => {
   const [percentStr, setPercentStr] = useState<string>('');
   const [touched, setTouched] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const parsedValue = useMemo(() => {
+  const parsedValue = (() => {
     if (!percentStr.trim()) return null;
     const num = parseFloat(percentStr.replace(',', '.'));
     return isNaN(num) ? null : num;
-  }, [percentStr]);
+  })();
 
   const isValid = parsedValue !== null && parsedValue >= 0 && parsedValue <= 100;
   const showError = touched && !isValid && percentStr.trim() !== '';
 
-  const financialResultBRL = useMemo(() => {
-    if (!isValid || parsedValue === null || netRevenue === null) return null;
-    return Math.round(netRevenue * (parsedValue / 100) * 100) / 100;
-  }, [isValid, parsedValue, netRevenue]);
-
-  const ebtValue = useMemo(() => {
-    if (ebit === null || financialResultBRL === null) return null;
-    return Math.round((ebit - financialResultBRL) * 100) / 100;
-  }, [ebit, financialResultBRL]);
 
   const handleContinue = () => {
     if (isValid) {
@@ -131,33 +110,6 @@ export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
           </p>
         </div>
 
-        {/* Real-time preview */}
-        {isValid && (
-          <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Receita Líquida</span>
-              <span className="font-medium text-foreground">{netRevenue !== null ? formatBRL(netRevenue) : '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">EBIT</span>
-              <span className="font-medium text-foreground">{ebit !== null ? formatBRL(ebit) : '—'}</span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">(−) Resultado Financeiro</span>
-              <span className="font-medium text-destructive">
-                {financialResultBRL !== null ? formatBRL(-financialResultBRL) : '—'}
-              </span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between font-semibold">
-              <span className="text-foreground">(=) EBT (Lucro antes do IR)</span>
-              <span className="text-foreground">
-                {ebtValue !== null ? formatBRL(ebtValue) : '—'}
-              </span>
-            </div>
-          </div>
-        )}
 
         {/* Buttons */}
         <div className="w-full flex flex-col gap-2">
@@ -191,27 +143,8 @@ export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
           </DialogHeader>
           <div className="space-y-2 text-sm py-2">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Receita Líquida</span>
-              <span className="font-medium">{netRevenue !== null ? formatBRL(netRevenue) : '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">EBIT</span>
-              <span className="font-medium">{ebit !== null ? formatBRL(ebit) : '—'}</span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-muted-foreground">% Resultado Financeiro</span>
               <span className="font-medium">{parsedValue}%</span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">(−) Resultado Financeiro</span>
-              <span className="font-medium text-destructive">
-                {financialResultBRL !== null ? formatBRL(-financialResultBRL) : '—'}
-              </span>
-            </div>
-            <div className="flex justify-between font-semibold">
-              <span>(=) EBT</span>
-              <span>{ebtValue !== null ? formatBRL(ebtValue) : '—'}</span>
             </div>
           </div>
           <DialogFooter>
