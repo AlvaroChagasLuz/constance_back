@@ -11,13 +11,14 @@ import { COGSInput } from '@/components/COGSInput';
 import { SGAInput } from '@/components/SGAInput';
 import { DAInput } from '@/components/DAInput';
 import { FinancialResultInput } from '@/components/FinancialResultInput';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, getProjectedNetRevenue, getProjectedEBIT } from '@/utils/projectionUtils';
+import { TaxInput } from '@/components/TaxInput';
+import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result' | 'tax';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -274,7 +275,7 @@ const Index = () => {
     setStep('da');
   }, []);
 
-  // Step 10b: Continue from Financial Result — apply to grid
+  // Step 10b: Continue from Financial Result — apply to grid, advance to tax
   const handleFinancialResultContinue = useCallback((financialResultPercent: number) => {
     if (!rightSpreadsheetData) return;
 
@@ -293,9 +294,41 @@ const Index = () => {
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
+    setStep('tax');
+
     toast({
       title: 'Resultado Financeiro aplicado!',
       description: `${financialResultPercent}% de resultado financeiro projetado sobre a receita líquida.`,
+    });
+  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // Step 11a: Back from Tax to Financial Result
+  const handleTaxBack = useCallback(() => {
+    setStep('financial_result');
+  }, []);
+
+  // Step 11b: Continue from Tax — apply tax to grid
+  const handleTaxContinue = useCallback((taxPercent: number) => {
+    if (!rightSpreadsheetData) return;
+
+    const updated = applyTaxProjection(rightSpreadsheetData, taxPercent, originalColCount);
+    setRightSpreadsheetData(updated);
+
+    const newEntries: AssumptionEntry[] = [
+      ...assumptionEntries.filter(e => e.label !== 'Impostos sobre EBT'),
+      {
+        category: 'Impostos',
+        label: 'Impostos sobre EBT',
+        value: taxPercent,
+        unit: '% do EBT',
+      },
+    ];
+    setAssumptionEntries(newEntries);
+    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
+
+    toast({
+      title: 'Impostos aplicados!',
+      description: `${taxPercent}% de imposto projetado sobre o EBT.`,
     });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
@@ -316,6 +349,8 @@ const Index = () => {
         return { label: 'D&A', Icon: BarChart3 };
       case 'financial_result':
         return { label: 'Resultado Financeiro', Icon: BarChart3 };
+      case 'tax':
+        return { label: 'Impostos / Tax', Icon: BarChart3 };
       default:
         return { label: 'Dados Importados', Icon: Table2 };
     }
@@ -365,6 +400,14 @@ const Index = () => {
             onContinue={handleFinancialResultContinue}
           />
         );
+      case 'tax':
+        return (
+          <TaxInput
+            ebt={getProjectedEBT(rightSpreadsheetData!, originalColCount)}
+            onBack={handleTaxBack}
+            onContinue={handleTaxContinue}
+          />
+        );
       default:
         return (
           <ExcelUpload
@@ -392,6 +435,8 @@ const Index = () => {
         return 'Despesas aplicadas — Defina a D&A';
       case 'financial_result':
         return 'D&A aplicada — Defina o Resultado Financeiro';
+      case 'tax':
+        return 'Resultado Financeiro aplicado — Defina os Impostos';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
