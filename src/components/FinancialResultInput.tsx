@@ -4,14 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
 
 interface FinancialResultInputProps {
   onBack?: () => void;
@@ -25,7 +17,6 @@ export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
 }) => {
   const [percentStr, setPercentStr] = useState<string>('');
   const [touched, setTouched] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const parsedValue = (() => {
     if (!percentStr.trim()) return null;
@@ -38,13 +29,6 @@ export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
 
 
   const handleContinue = () => {
-    if (isValid) {
-      setShowConfirm(true);
-    }
-  };
-
-  const handleConfirm = () => {
-    setShowConfirm(false);
     if (isValid && parsedValue !== null) {
       onContinue?.(parsedValue);
     }
@@ -132,31 +116,6 @@ export const FinancialResultInput: React.FC<FinancialResultInputProps> = ({
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Resultado Financeiro</DialogTitle>
-            <DialogDescription>
-              Confirma o percentual de Resultado Financeiro informado? Você poderá alterar esse valor posteriormente.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 text-sm py-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">% Resultado Financeiro</span>
-              <span className="font-medium">{parsedValue}%</span>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowConfirm(false)}>
-              Editar
-            </Button>
-            <Button onClick={handleConfirm}>
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
