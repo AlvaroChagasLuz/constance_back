@@ -762,10 +762,10 @@ export function applyCOGSProjection(
 /**
  * Tax / Net Income label patterns.
  */
-const TAX_PATTERNS: { labels: string[]; priority: number }[] = [
+const TAX_PATTERNS: { labels: string[]; priority: number; excludes?: string[] }[] = [
   { labels: ['imposto de renda', 'ir/csll', 'irpj', 'income tax'], priority: 1 },
   { labels: ['impostos sobre o lucro', 'impostos sobre lucro', 'tax on profit'], priority: 2 },
-  { labels: ['impostos', 'tax'], priority: 3 },
+  { labels: ['imposto', 'impostos', 'tax'], priority: 3, excludes: ['sobre vendas', 'sobre receita', 'sobre faturamento', 'sales tax', 'antes do imposto', 'before tax', 'ebt'] },
 ];
 
 const NET_INCOME_PATTERNS: { labels: string[]; priority: number }[] = [
@@ -774,7 +774,35 @@ const NET_INCOME_PATTERNS: { labels: string[]; priority: number }[] = [
 ];
 
 export function findTaxRow(data: SpreadsheetData): number | null {
-  return findRowByPatterns(data, TAX_PATTERNS);
+  const maxLabelCols = Math.min(5, data.colCount);
+  const candidates: { row: number; priority: number }[] = [];
+
+  for (let r = 0; r < data.values.length; r++) {
+    const row = data.values[r];
+    if (!row) continue;
+
+    for (let c = 0; c < maxLabelCols; c++) {
+      const val = row[c];
+      if (val == null) continue;
+
+      const cellText = String(val).trim().toLowerCase();
+      if (!cellText) continue;
+
+      for (const pattern of TAX_PATTERNS) {
+        if (pattern.labels.some(label => cellText.includes(label))) {
+          // Check excludes
+          if (pattern.excludes && pattern.excludes.some(ex => cellText.includes(ex))) {
+            continue;
+          }
+          candidates.push({ row: r, priority: pattern.priority });
+        }
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].row;
 }
 
 export function findNetIncomeRow(data: SpreadsheetData): number | null {
