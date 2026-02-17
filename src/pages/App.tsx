@@ -15,8 +15,10 @@ import { TaxInput } from '@/components/TaxInput';
 import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet } from 'lucide-react';
+import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result' | 'tax';
 type RightTab = 'base' | 'financials' | 'assumptions';
@@ -358,6 +360,50 @@ const Index = () => {
 
   const { label: leftTabLabel, Icon: LeftTabIcon } = getLeftTabConfig();
 
+  const handleDownloadExcel = useCallback(async () => {
+    if (!rightSpreadsheetData) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Financials');
+    const { values, formats, columnWidths } = rightSpreadsheetData;
+
+    values.forEach((row, ri) => {
+      const excelRow = ws.addRow(row.map(v => v ?? ''));
+      row.forEach((_, ci) => {
+        const fmt = formats?.[ri]?.[ci];
+        if (!fmt) return;
+        const cell = excelRow.getCell(ci + 1);
+        if (fmt.bold || fmt.italic || fmt.underline || fmt.textColor || fmt.fontSize) {
+          cell.font = {
+            bold: fmt.bold,
+            italic: fmt.italic,
+            underline: fmt.underline ? 'single' : undefined,
+            color: fmt.textColor ? { argb: fmt.textColor.replace('#', 'FF') } : undefined,
+            size: fmt.fontSize,
+          };
+        }
+        if (fmt.bgColor) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fmt.bgColor.replace('#', 'FF') } };
+        }
+        if (fmt.horizontalAlignment) {
+          cell.alignment = { horizontal: fmt.horizontalAlignment as any, vertical: fmt.verticalAlignment as any, wrapText: fmt.wrapText };
+        }
+        if (fmt.numberFormat) {
+          cell.numFmt = fmt.numberFormat;
+        }
+      });
+    });
+
+    if (columnWidths) {
+      columnWidths.forEach((w, i) => {
+        ws.getColumn(i + 1).width = Math.max(w / 7, 8);
+      });
+    }
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `Constance_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }, [rightSpreadsheetData]);
+
   // Render left panel content based on step
   const renderLeftPanel = () => {
     switch (step) {
@@ -468,10 +514,21 @@ const Index = () => {
         <div className="w-[40%] border-r border-border flex flex-col">
           {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
-            <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
+           <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
               <LeftTabIcon className="w-3.5 h-3.5 text-primary" />
               {leftTabLabel}
             </div>
+            {rightSpreadsheetData && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto mr-1 h-6 text-xs gap-1 px-2"
+                onClick={handleDownloadExcel}
+              >
+                <Download className="w-3 h-3" />
+                Excel
+              </Button>
+            )}
           </div>
 
           {/* Left panel content */}
