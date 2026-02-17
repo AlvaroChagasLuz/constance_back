@@ -4,14 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
 
 interface TaxInputProps {
   ebt: number | null;
@@ -35,7 +27,6 @@ export const TaxInput: React.FC<TaxInputProps> = ({
 }) => {
   const [percentStr, setPercentStr] = useState<string>('');
   const [touched, setTouched] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
 
   const parsedValue = (() => {
     if (!percentStr.trim()) return null;
@@ -67,13 +58,6 @@ export const TaxInput: React.FC<TaxInputProps> = ({
 
   const handleContinue = () => {
     if (isValid && parsedValue !== null) {
-      setShowConfirm(true);
-    }
-  };
-
-  const handleConfirm = () => {
-    setShowConfirm(false);
-    if (parsedValue !== null) {
       onContinue?.(parsedValue);
     }
   };
@@ -186,48 +170,6 @@ export const TaxInput: React.FC<TaxInputProps> = ({
         </div>
       </div>
 
-      {/* Confirmation Dialog */}
-      <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirmar Alíquota de Imposto</DialogTitle>
-            <DialogDescription>
-              Confirma a alíquota de imposto informada? Ela será aplicada sobre o EBT em todos os períodos da projeção. Você poderá alterar esse valor posteriormente.
-            </DialogDescription>
-          </DialogHeader>
-          {preview && (
-            <div className="space-y-2 py-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">EBT (Lucro antes do IR)</span>
-                <span className="font-medium">{formatBRL(preview.ebt)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Alíquota informada</span>
-                <span className="font-medium">{parsedValue}%</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">(−) Impostos / Tax</span>
-                <span className="font-medium text-destructive">{formatBRL(-preview.tax)}</span>
-              </div>
-              <div className="border-t border-border my-1" />
-              <div className="flex justify-between text-sm">
-                <span className="font-medium">Lucro Líquido / Net Income</span>
-                <span className={`font-semibold ${preview.netIncome >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-                  {formatBRL(preview.netIncome)}
-                </span>
-              </div>
-            </div>
-          )}
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowConfirm(false)}>
-              Editar
-            </Button>
-            <Button onClick={handleConfirm}>
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
