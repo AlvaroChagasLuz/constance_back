@@ -759,3 +759,89 @@ export function applyCOGSProjection(
   };
 }
 
+/**
+ * Tax / Net Income label patterns.
+ */
+const TAX_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['imposto de renda', 'ir/csll', 'irpj', 'income tax'], priority: 1 },
+  { labels: ['impostos sobre o lucro', 'impostos sobre lucro', 'tax on profit'], priority: 2 },
+  { labels: ['impostos', 'tax'], priority: 3 },
+];
+
+const NET_INCOME_PATTERNS: { labels: string[]; priority: number }[] = [
+  { labels: ['lucro líquido', 'lucro liquido', 'net income'], priority: 1 },
+  { labels: ['resultado líquido', 'resultado liquido', 'net result'], priority: 2 },
+];
+
+export function findTaxRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, TAX_PATTERNS);
+}
+
+export function findNetIncomeRow(data: SpreadsheetData): number | null {
+  return findRowByPatterns(data, NET_INCOME_PATTERNS);
+}
+
+/**
+ * Get the projected EBT value for the first projection column.
+ */
+export function getProjectedEBT(data: SpreadsheetData, originalColCount: number): number | null {
+  const ebtRow = findEBTRow(data);
+  if (ebtRow === null) return null;
+
+  const firstProjCol = originalColCount;
+  if (firstProjCol >= data.colCount) return null;
+
+  const val = data.values[ebtRow]?.[firstProjCol];
+  if (val == null) return null;
+
+  const num = typeof val === 'number' ? val : parseFloat(String(val));
+  return isNaN(num) ? null : num;
+}
+
+/**
+ * Apply Tax as a percentage of EBT to each projected column.
+ * If EBT < 0, tax = 0 and Net Income = EBT (no tax credit).
+ * Also computes Net Income = EBT - Tax.
+ */
+export function applyTaxProjection(
+  data: SpreadsheetData,
+  taxPercent: number,
+  originalColCount: number
+): SpreadsheetData {
+  const ebtRow = findEBTRow(data);
+  const taxRow = findTaxRow(data);
+  const netIncomeRow = findNetIncomeRow(data);
+
+  if (ebtRow === null || taxRow === null) {
+    return data;
+  }
+
+  const newValues = data.values.map(row => [...row]);
+  const rate = taxPercent / 100;
+
+  for (let c = originalColCount; c < data.colCount; c++) {
+    const ebtVal = newValues[ebtRow][c];
+    if (ebtVal == null) continue;
+
+    const ebt = typeof ebtVal === 'number' ? ebtVal : parseFloat(String(ebtVal));
+    if (isNaN(ebt)) continue;
+
+    // If EBT < 0, no tax (no fiscal credit)
+    const tax = ebt < 0 ? 0 : Math.round(ebt * rate * 100) / 100;
+    newValues[taxRow][c] = -tax;
+
+    if (netIncomeRow !== null) {
+      newValues[netIncomeRow][c] = Math.round((ebt - tax) * 100) / 100;
+    }
+  }
+
+  return {
+    ...data,
+    values: newValues,
+    formats: data.formats?.map(row => row.map(f => cloneFormat(f))),
+    mergedCells: data.mergedCells?.map(m => ({ ...m })),
+    columnWidths: data.columnWidths ? [...data.columnWidths] : undefined,
+    rowHeights: data.rowHeights ? [...data.rowHeights] : undefined,
+  };
+}
+
