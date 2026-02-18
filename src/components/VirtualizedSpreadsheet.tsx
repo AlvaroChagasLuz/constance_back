@@ -83,6 +83,7 @@ const Cell = ({
   }
 
   const cellValue = spreadsheetData?.values?.[rowIndex]?.[columnIndex];
+  const cellFormula = spreadsheetData?.formulas?.[rowIndex]?.[columnIndex];
   const cellFormat = spreadsheetData?.formats?.[rowIndex]?.[columnIndex];
 
   // Format numbers: max 2 decimals, Brazilian locale (dot = thousands, comma = decimal)
@@ -108,6 +109,9 @@ const Cell = ({
       displayValue = String(cellValue);
     }
   }
+
+  // Tooltip: show formula if available, otherwise show display value
+  const tooltipText = cellFormula ? `${cellFormula}  →  ${displayValue}` : displayValue;
 
   // Build cell style with formatting
   const cellStyle: React.CSSProperties = { ...style };
@@ -191,7 +195,7 @@ const Cell = ({
       className={`border-r border-b border-border px-2 flex items-center text-xs overflow-hidden ${
         !cellFormat?.bgColor ? 'bg-background' : ''
       }`}
-      title={displayValue}
+      title={tooltipText}
     >
       <span className={cellFormat?.wrapText ? '' : 'truncate'}>{displayValue}</span>
     </div>
