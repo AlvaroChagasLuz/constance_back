@@ -29,6 +29,7 @@ export interface MergedCell {
 
 export interface SpreadsheetData {
   values: (string | number | null)[][];
+  formulas?: (string | null)[][];
   formats?: (CellFormat | null)[][];
   mergedCells?: MergedCell[];
   columnWidths?: number[];

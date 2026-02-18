@@ -44,6 +44,7 @@ const Index = () => {
     if (leftSpreadsheetData) {
       const deepCopy = (src: SpreadsheetData): SpreadsheetData => ({
         values: src.values.map(row => [...row]),
+        formulas: src.formulas?.map(row => [...row]),
         formats: src.formats?.map(row => row.map(f => f ? { ...f } : null)),
         mergedCells: src.mergedCells?.map(m => ({ ...m })),
         columnWidths: src.columnWidths ? [...src.columnWidths] : undefined,
@@ -364,14 +365,22 @@ const Index = () => {
     if (!rightSpreadsheetData) return;
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Financials');
-    const { values, formats, columnWidths } = rightSpreadsheetData;
+    const { values, formats, formulas, columnWidths } = rightSpreadsheetData;
 
     values.forEach((row, ri) => {
       const excelRow = ws.addRow(row.map(v => v ?? ''));
       row.forEach((_, ci) => {
+        const cell = excelRow.getCell(ci + 1);
+
+        // If a formula exists for this cell, use it instead of the static value
+        const formula = formulas?.[ri]?.[ci];
+        if (formula) {
+          // Remove the leading '=' for ExcelJS (it adds it automatically)
+          cell.value = { formula: formula.startsWith('=') ? formula.slice(1) : formula } as any;
+        }
+
         const fmt = formats?.[ri]?.[ci];
         if (!fmt) return;
-        const cell = excelRow.getCell(ci + 1);
         if (fmt.bold || fmt.italic || fmt.underline || fmt.textColor || fmt.fontSize) {
           cell.font = {
             bold: fmt.bold,
