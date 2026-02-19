@@ -61,6 +61,38 @@ const LINK_FORMAT: CellFormat = {
 };
 
 /**
+ * Compute a map of { label → 1-indexed Excel row } for each assumption entry's value cell (column C).
+ * This is used to generate cross-sheet formula references like =Premissas!C7
+ */
+export function buildAssumptionsRowMap(entries: AssumptionEntry[]): Map<string, number> {
+  // Layout mirrors buildAssumptionsSheet:
+  // Row 1 (index 0): Title
+  // Row 2 (index 1): Spacer
+  // Row 3 (index 2): Headers
+  // Row 4+ (index 3+): grouped entries
+  const map = new Map<string, number>();
+  const grouped = new Map<string, AssumptionEntry[]>();
+  for (const entry of entries) {
+    const group = grouped.get(entry.category) || [];
+    group.push(entry);
+    grouped.set(entry.category, group);
+  }
+
+  let currentRow = 3; // 0-indexed; row 4 in Excel (1-indexed)
+  for (const [, items] of grouped) {
+    currentRow++; // category header row
+    for (const item of items) {
+      // value is in column C (index 2), Excel row = currentRow + 1 (1-indexed)
+      map.set(item.label, currentRow + 1);
+      currentRow++;
+    }
+    currentRow++; // empty spacer after group
+  }
+
+  return map;
+}
+
+/**
  * Build a SpreadsheetData representing the consolidated assumptions sheet.
  * Each assumption is shown with its category, label, value, unit, and a "link" reference
  * indicating where the value is used in the model.

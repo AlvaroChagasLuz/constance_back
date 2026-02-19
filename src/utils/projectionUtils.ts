@@ -422,11 +422,13 @@ export function getProjectedEBT(data: SpreadsheetData, originalColCount: number)
 
 /**
  * Apply revenue growth rate. Formula: =PREV_COL*(1+rate)
+ * If premissasExcelRow is provided, references Premissas!C{row} instead of hardcoded rate.
  */
 export function applyRevenueProjection(
   data: SpreadsheetData,
   growthRate: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const revenueRow = findRevenueRow(data);
   if (revenueRow === null) return data;
@@ -436,6 +438,7 @@ export function applyRevenueProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = growthRate / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
   let previousValue = lastHistorical.value;
 
   for (let c = originalColCount; c < data.colCount; c++) {
@@ -443,7 +446,7 @@ export function applyRevenueProjection(
     newValues[revenueRow][c] = Math.round(projectedValue * 100) / 100;
 
     const prevCol = c - 1;
-    newFormulas[revenueRow][c] = `=${cellRef(revenueRow, prevCol)}*(1+${rate})`;
+    newFormulas[revenueRow][c] = `=${cellRef(revenueRow, prevCol)}*(1+${rateRef})`;
 
     previousValue = projectedValue;
   }
@@ -455,11 +458,13 @@ export function applyRevenueProjection(
  * Apply deductions as % of gross revenue.
  * Deductions formula: =-REVENUE*rate
  * Net Revenue formula: =REVENUE+DEDUCTIONS
+ * If premissasExcelRow is provided, references Premissas!C{row}/100 instead of hardcoded rate.
  */
 export function applyDeductionsProjection(
   data: SpreadsheetData,
   deductionsPercent: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const revenueRow = findRevenueRow(data);
   const deductionsRow = findDeductionsRow(data);
@@ -469,6 +474,7 @@ export function applyDeductionsProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = deductionsPercent / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
 
   for (let c = originalColCount; c < data.colCount; c++) {
     const revenueVal = newValues[revenueRow][c];
@@ -478,7 +484,7 @@ export function applyDeductionsProjection(
 
     const deduction = Math.round(revenue * rate * 100) / 100;
     newValues[deductionsRow][c] = -deduction;
-    newFormulas[deductionsRow][c] = `=-${cellRef(revenueRow, c)}*${rate}`;
+    newFormulas[deductionsRow][c] = `=-${cellRef(revenueRow, c)}*${rateRef}`;
 
     if (netRevenueRow !== null) {
       newValues[netRevenueRow][c] = Math.round((revenue - deduction) * 100) / 100;
@@ -493,11 +499,13 @@ export function applyDeductionsProjection(
  * Apply COGS as % of Net Revenue.
  * COGS formula: =-NET_REV*rate
  * Gross Profit formula: =NET_REV+COGS
+ * If premissasExcelRow is provided, references Premissas!C{row}/100 instead of hardcoded rate.
  */
 export function applyCOGSProjection(
   data: SpreadsheetData,
   cogsPercent: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const netRevenueRow = findNetRevenueRow(data);
   const cogsRow = findCOGSRow(data);
@@ -507,6 +515,7 @@ export function applyCOGSProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = cogsPercent / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
 
   for (let c = originalColCount; c < data.colCount; c++) {
     const netRevVal = newValues[netRevenueRow][c];
@@ -516,7 +525,7 @@ export function applyCOGSProjection(
 
     const cogs = Math.round(netRevenue * rate * 100) / 100;
     newValues[cogsRow][c] = -cogs;
-    newFormulas[cogsRow][c] = `=-${cellRef(netRevenueRow, c)}*${rate}`;
+    newFormulas[cogsRow][c] = `=-${cellRef(netRevenueRow, c)}*${rateRef}`;
 
     if (grossProfitRow !== null) {
       newValues[grossProfitRow][c] = Math.round((netRevenue - cogs) * 100) / 100;
@@ -531,11 +540,13 @@ export function applyCOGSProjection(
  * Apply SGA as % of Gross Profit.
  * SGA formula: =-GROSS_PROFIT*rate
  * EBITDA formula: =GROSS_PROFIT+SGA
+ * If premissasExcelRow is provided, references Premissas!C{row}/100 instead of hardcoded rate.
  */
 export function applySGAProjection(
   data: SpreadsheetData,
   sgaPercent: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const grossProfitRow = findGrossProfitRow(data);
   const sgaRow = findSGARow(data);
@@ -545,6 +556,7 @@ export function applySGAProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = sgaPercent / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
 
   for (let c = originalColCount; c < data.colCount; c++) {
     const gpVal = newValues[grossProfitRow][c];
@@ -554,7 +566,7 @@ export function applySGAProjection(
 
     const sga = Math.round(gp * rate * 100) / 100;
     newValues[sgaRow][c] = -sga;
-    newFormulas[sgaRow][c] = `=-${cellRef(grossProfitRow, c)}*${rate}`;
+    newFormulas[sgaRow][c] = `=-${cellRef(grossProfitRow, c)}*${rateRef}`;
 
     if (ebitdaRow !== null) {
       newValues[ebitdaRow][c] = Math.round((gp - sga) * 100) / 100;
@@ -569,11 +581,13 @@ export function applySGAProjection(
  * Apply D&A as % of Net Revenue.
  * D&A formula: =-NET_REV*rate
  * EBIT formula: =EBITDA+DA
+ * If premissasExcelRow is provided, references Premissas!C{row}/100 instead of hardcoded rate.
  */
 export function applyDAProjection(
   data: SpreadsheetData,
   daPercent: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const netRevenueRow = findNetRevenueRow(data);
   const daRow = findDARow(data);
@@ -584,6 +598,7 @@ export function applyDAProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = daPercent / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
 
   for (let c = originalColCount; c < data.colCount; c++) {
     const netRevVal = newValues[netRevenueRow][c];
@@ -593,7 +608,7 @@ export function applyDAProjection(
 
     const da = Math.round(netRevenue * rate * 100) / 100;
     newValues[daRow][c] = -da;
-    newFormulas[daRow][c] = `=-${cellRef(netRevenueRow, c)}*${rate}`;
+    newFormulas[daRow][c] = `=-${cellRef(netRevenueRow, c)}*${rateRef}`;
 
     if (ebitRow !== null && ebitdaRow !== null) {
       const ebitdaVal = newValues[ebitdaRow][c];
@@ -614,11 +629,13 @@ export function applyDAProjection(
  * Apply Financial Result as % of Net Revenue.
  * Fin Result formula: =-NET_REV*rate
  * EBT formula: =EBIT+FIN_RESULT
+ * If premissasExcelRow is provided, references Premissas!C{row}/100 instead of hardcoded rate.
  */
 export function applyFinancialResultProjection(
   data: SpreadsheetData,
   financialResultPercent: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const netRevenueRow = findNetRevenueRow(data);
   const financialResultRow = findFinancialResultRow(data);
@@ -629,6 +646,7 @@ export function applyFinancialResultProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = financialResultPercent / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
 
   for (let c = originalColCount; c < data.colCount; c++) {
     const netRevVal = newValues[netRevenueRow][c];
@@ -638,7 +656,7 @@ export function applyFinancialResultProjection(
 
     const financialResult = Math.round(netRevenue * rate * 100) / 100;
     newValues[financialResultRow][c] = -financialResult;
-    newFormulas[financialResultRow][c] = `=-${cellRef(netRevenueRow, c)}*${rate}`;
+    newFormulas[financialResultRow][c] = `=-${cellRef(netRevenueRow, c)}*${rateRef}`;
 
     if (ebtRow !== null && ebitRow !== null) {
       const ebitVal = newValues[ebitRow][c];
@@ -659,11 +677,13 @@ export function applyFinancialResultProjection(
  * Apply Tax as % of EBT.
  * Tax formula: =IF(EBT<0,0,-EBT*rate)
  * Net Income formula: =EBT+TAX
+ * If premissasExcelRow is provided, references Premissas!C{row}/100 instead of hardcoded rate.
  */
 export function applyTaxProjection(
   data: SpreadsheetData,
   taxPercent: number,
-  originalColCount: number
+  originalColCount: number,
+  premissasExcelRow?: number
 ): SpreadsheetData {
   const ebtRow = findEBTRow(data);
   const taxRow = findTaxRow(data);
@@ -673,6 +693,7 @@ export function applyTaxProjection(
 
   const { newValues, newFormulas } = cloneDataArrays(data);
   const rate = taxPercent / 100;
+  const rateRef = premissasExcelRow ? `Premissas!C${premissasExcelRow}/100` : `${rate}`;
 
   for (let c = originalColCount; c < data.colCount; c++) {
     const ebtVal = newValues[ebtRow][c];
@@ -682,7 +703,7 @@ export function applyTaxProjection(
 
     const tax = ebt < 0 ? 0 : Math.round(ebt * rate * 100) / 100;
     newValues[taxRow][c] = -tax;
-    newFormulas[taxRow][c] = `=IF(${cellRef(ebtRow, c)}<0,0,-${cellRef(ebtRow, c)}*${rate})`;
+    newFormulas[taxRow][c] = `=IF(${cellRef(ebtRow, c)}<0,0,-${cellRef(ebtRow, c)}*${rateRef})`;
 
     if (netIncomeRow !== null) {
       newValues[netIncomeRow][c] = Math.round((ebt - tax) * 100) / 100;
