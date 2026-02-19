@@ -361,24 +361,16 @@ const Index = () => {
 
   const { label: leftTabLabel, Icon: LeftTabIcon } = getLeftTabConfig();
 
-  const handleDownloadExcel = useCallback(async () => {
-    if (!rightSpreadsheetData) return;
-    const wb = new ExcelJS.Workbook();
-    const ws = wb.addWorksheet('Financials');
-    const { values, formats, formulas, columnWidths } = rightSpreadsheetData;
-
+  const writeSheetFromSpreadsheetData = (ws: ExcelJS.Worksheet, data: SpreadsheetData) => {
+    const { values, formats, formulas, columnWidths } = data;
     values.forEach((row, ri) => {
       const excelRow = ws.addRow(row.map(v => v ?? ''));
       row.forEach((_, ci) => {
         const cell = excelRow.getCell(ci + 1);
-
-        // If a formula exists for this cell, use it instead of the static value
         const formula = formulas?.[ri]?.[ci];
         if (formula) {
-          // Remove the leading '=' for ExcelJS (it adds it automatically)
           cell.value = { formula: formula.startsWith('=') ? formula.slice(1) : formula } as any;
         }
-
         const fmt = formats?.[ri]?.[ci];
         if (!fmt) return;
         if (fmt.bold || fmt.italic || fmt.underline || fmt.textColor || fmt.fontSize) {
@@ -401,17 +393,37 @@ const Index = () => {
         }
       });
     });
-
     if (columnWidths) {
       columnWidths.forEach((w, i) => {
         ws.getColumn(i + 1).width = Math.max(w / 7, 8);
       });
     }
+  };
+
+  const handleDownloadExcel = useCallback(async () => {
+    if (!rightSpreadsheetData) return;
+    const wb = new ExcelJS.Workbook();
+
+    // Sheet 1: Base (original data)
+    if (baseSheetData) {
+      const wsBase = wb.addWorksheet('Base');
+      writeSheetFromSpreadsheetData(wsBase, baseSheetData);
+    }
+
+    // Sheet 2: Financials (projection working space)
+    const wsFinancials = wb.addWorksheet('Financials');
+    writeSheetFromSpreadsheetData(wsFinancials, rightSpreadsheetData);
+
+    // Sheet 3: Premissas (assumptions)
+    if (assumptionsSheetData) {
+      const wsPremissas = wb.addWorksheet('Premissas');
+      writeSheetFromSpreadsheetData(wsPremissas, assumptionsSheetData);
+    }
 
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(blob, `Constance_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-  }, [rightSpreadsheetData]);
+  }, [rightSpreadsheetData, baseSheetData, assumptionsSheetData]);
 
   // Render left panel content based on step
   const renderLeftPanel = () => {
