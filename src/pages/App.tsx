@@ -13,7 +13,7 @@ import { DAInput } from '@/components/DAInput';
 import { FinancialResultInput } from '@/components/FinancialResultInput';
 import { TaxInput } from '@/components/TaxInput';
 import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
-import { buildAssumptionsSheet, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
+import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -111,11 +111,7 @@ const Index = () => {
   const handleApplyRevenue = useCallback((revenueGrowthRate: number) => {
     if (!projectedBaseData) return;
 
-    const projected = applyRevenueProjection(projectedBaseData, revenueGrowthRate, originalColCount);
-    setRightSpreadsheetData(projected);
-    setHasAppliedRevenue(true);
-
-    // Update assumptions entries with the revenue growth rate
+    // Build updated entries first so we can compute the row map
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Taxa de Crescimento de Receita'),
       {
@@ -125,6 +121,13 @@ const Index = () => {
         unit: '% a.a.',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('Taxa de Crescimento de Receita');
+
+    const projected = applyRevenueProjection(projectedBaseData, revenueGrowthRate, originalColCount, premissasRow);
+    setRightSpreadsheetData(projected);
+    setHasAppliedRevenue(true);
+
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
@@ -152,10 +155,6 @@ const Index = () => {
   const handleDeductionsContinue = useCallback((deductionsPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    const updated = applyDeductionsProjection(rightSpreadsheetData, deductionsPercent, originalColCount);
-    setRightSpreadsheetData(updated);
-
-    // Update assumptions entries
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Deduções sobre Receita Bruta'),
       {
@@ -165,6 +164,11 @@ const Index = () => {
         unit: '% da Receita Bruta',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('Deduções sobre Receita Bruta');
+
+    const updated = applyDeductionsProjection(rightSpreadsheetData, deductionsPercent, originalColCount, premissasRow);
+    setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
@@ -185,10 +189,6 @@ const Index = () => {
   const handleCOGSContinue = useCallback((cogsPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    const updated = applyCOGSProjection(rightSpreadsheetData, cogsPercent, originalColCount);
-    setRightSpreadsheetData(updated);
-
-    // Update assumptions entries
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Custo (CMV) sobre Receita Líquida'),
       {
@@ -198,6 +198,11 @@ const Index = () => {
         unit: '% da Receita Líquida',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('Custo (CMV) sobre Receita Líquida');
+
+    const updated = applyCOGSProjection(rightSpreadsheetData, cogsPercent, originalColCount, premissasRow);
+    setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
@@ -218,9 +223,6 @@ const Index = () => {
   const handleSGAContinue = useCallback((sgaPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    const updated = applySGAProjection(rightSpreadsheetData, sgaPercent, originalColCount);
-    setRightSpreadsheetData(updated);
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Despesas (SG&A) sobre Lucro Bruto'),
       {
@@ -230,6 +232,11 @@ const Index = () => {
         unit: '% do Lucro Bruto',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('Despesas (SG&A) sobre Lucro Bruto');
+
+    const updated = applySGAProjection(rightSpreadsheetData, sgaPercent, originalColCount, premissasRow);
+    setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
@@ -250,9 +257,6 @@ const Index = () => {
   const handleDAContinue = useCallback((daPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    const updated = applyDAProjection(rightSpreadsheetData, daPercent, originalColCount);
-    setRightSpreadsheetData(updated);
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'D&A sobre Receita Líquida'),
       {
@@ -262,6 +266,11 @@ const Index = () => {
         unit: '% da Receita Líquida',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('D&A sobre Receita Líquida');
+
+    const updated = applyDAProjection(rightSpreadsheetData, daPercent, originalColCount, premissasRow);
+    setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
@@ -282,9 +291,6 @@ const Index = () => {
   const handleFinancialResultContinue = useCallback((financialResultPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    const updated = applyFinancialResultProjection(rightSpreadsheetData, financialResultPercent, originalColCount);
-    setRightSpreadsheetData(updated);
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Resultado Financeiro sobre Receita Líquida'),
       {
@@ -294,6 +300,11 @@ const Index = () => {
         unit: '% da Receita Líquida',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('Resultado Financeiro sobre Receita Líquida');
+
+    const updated = applyFinancialResultProjection(rightSpreadsheetData, financialResultPercent, originalColCount, premissasRow);
+    setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
@@ -314,9 +325,6 @@ const Index = () => {
   const handleTaxContinue = useCallback((taxPercent: number) => {
     if (!rightSpreadsheetData) return;
 
-    const updated = applyTaxProjection(rightSpreadsheetData, taxPercent, originalColCount);
-    setRightSpreadsheetData(updated);
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Impostos sobre EBT'),
       {
@@ -326,6 +334,11 @@ const Index = () => {
         unit: '% do EBT',
       },
     ];
+    const rowMap = buildAssumptionsRowMap(newEntries);
+    const premissasRow = rowMap.get('Impostos sobre EBT');
+
+    const updated = applyTaxProjection(rightSpreadsheetData, taxPercent, originalColCount, premissasRow);
+    setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
