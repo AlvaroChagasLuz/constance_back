@@ -1,6 +1,27 @@
 import type { SpreadsheetData, YearsRowData, YearsRowColumn, YearsRowDetectionResult, ColumnType } from '@/types/spreadsheet';
 
 /**
+ * Find the last (max) year in the spreadsheet data by scanning header rows.
+ */
+export function detectLastYearFromData(data: SpreadsheetData): number | null {
+  let maxYear: number | null = null;
+  for (let r = 0; r < Math.min(data.values.length, 10); r++) {
+    const row = data.values[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      const val = row[c];
+      if (val == null) continue;
+      const str = String(val).trim();
+      const num = parseInt(str, 10);
+      if (num >= 1990 && num <= 2100 && String(num) === str) {
+        if (maxYear === null || num > maxYear) maxYear = num;
+      }
+    }
+  }
+  return maxYear;
+}
+
+/**
  * Detect the Years Row in the spreadsheet data.
  * The Years Row is the single row containing the time axis (e.g., 2020, 2021, 2022...).
  */
