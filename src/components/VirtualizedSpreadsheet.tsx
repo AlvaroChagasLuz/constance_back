@@ -219,7 +219,7 @@ const Cell = ({
   return (
     <div
       style={cellStyle}
-      className={`border-r border-b border-border px-2 flex items-center text-xs overflow-hidden ${
+      className={`px-2 flex items-center text-xs overflow-hidden ${
         !cellFormat?.bgColor ? (yearsRowClass || 'bg-background') : ''
       } ${isNumeric ? 'justify-end' : ''}`}
       title={finalTooltip}
