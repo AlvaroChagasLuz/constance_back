@@ -221,7 +221,7 @@ const Cell = ({
       style={cellStyle}
       className={`border-r border-b border-border px-2 flex items-center text-xs overflow-hidden ${
         !cellFormat?.bgColor ? (yearsRowClass || 'bg-background') : ''
-      }`}
+      } ${yearsRow && rowIndex === yearsRow.rowIndex ? 'justify-end' : ''}`}
       title={finalTooltip}
     >
       <span className={cellFormat?.wrapText ? '' : 'truncate'}>{displayValue}</span>
