@@ -91,6 +91,7 @@ const Cell = ({
 
   // Format numbers: max 2 decimals, Brazilian locale (dot = thousands, comma = decimal)
   let displayValue = '';
+  let isNumeric = false;
   if (cellValue != null) {
     let num: number | null = null;
     if (typeof cellValue === 'number') {
@@ -104,6 +105,7 @@ const Cell = ({
     }
 
     if (num !== null) {
+      isNumeric = true;
       // Years (1990-2099) displayed as integers
       const isYear = Number.isInteger(num) && num >= 1990 && num <= 2099;
       displayValue = isYear
@@ -221,7 +223,7 @@ const Cell = ({
       style={cellStyle}
       className={`border-r border-b border-border px-2 flex items-center text-xs overflow-hidden ${
         !cellFormat?.bgColor ? (yearsRowClass || 'bg-background') : ''
-      } ${yearsRow && rowIndex === yearsRow.rowIndex ? 'justify-end' : ''}`}
+      } ${isNumeric ? 'justify-end' : ''}`}
       title={finalTooltip}
     >
       <span className={cellFormat?.wrapText ? '' : 'truncate'}>{displayValue}</span>
