@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { Grid, GridImperativeAPI } from 'react-window';
-import type { SpreadsheetData, CellFormat, MergedCell } from '@/types/spreadsheet';
+import type { SpreadsheetData, CellFormat, MergedCell, YearsRowData, ColumnType } from '@/types/spreadsheet';
 import { borderToCss } from '@/utils/excelFormatParser';
 import { useSpreadsheetResize } from '@/hooks/useSpreadsheetResize';
 
@@ -12,6 +12,7 @@ interface VirtualizedSpreadsheetProps {
   totalColumns?: number;
   data?: SpreadsheetData | null;
   emptyMessage?: React.ReactNode;
+  yearsRow?: YearsRowData | null;
 }
 
 // Helper to generate column letters (A, B, C, ... Z, AA, AB, ... CV)
@@ -57,6 +58,7 @@ interface CellData {
   mergedSpans: Map<string, { rowSpan: number; colSpan: number }>;
   columnWidths: number[];
   rowHeights: number[];
+  yearsRow: YearsRowData | null;
 }
 
 // Cell component for the grid
@@ -69,6 +71,7 @@ const Cell = ({
   mergedSpans,
   columnWidths,
   rowHeights,
+  yearsRow,
 }: {
   columnIndex: number;
   rowIndex: number;
@@ -191,13 +194,33 @@ const Cell = ({
     }
   }
 
+  // Years row column classification styling
+  let yearsRowClass = '';
+  let yearsRowTooltip = '';
+  if (yearsRow && rowIndex === yearsRow.rowIndex) {
+    const colInfo = yearsRow.columns.find(c => c.colIndex === columnIndex);
+    if (colInfo) {
+      if (colInfo.columnType === 'historical') {
+        yearsRowTooltip = `${colInfo.year} — Ano histórico`;
+      } else if (colInfo.columnType === 'current') {
+        yearsRowClass = 'bg-blue-50 dark:bg-blue-900/20';
+        yearsRowTooltip = `${colInfo.year} — Ano corrente`;
+      } else if (colInfo.columnType === 'projection') {
+        yearsRowClass = 'bg-emerald-50 dark:bg-emerald-900/20';
+        yearsRowTooltip = `${colInfo.year} — Ano projetado`;
+      }
+    }
+  }
+
+  const finalTooltip = yearsRowTooltip || tooltipText;
+
   return (
     <div
       style={cellStyle}
       className={`border-r border-b border-border px-2 flex items-center text-xs overflow-hidden ${
-        !cellFormat?.bgColor ? 'bg-background' : ''
+        !cellFormat?.bgColor ? (yearsRowClass || 'bg-background') : ''
       }`}
-      title={tooltipText}
+      title={finalTooltip}
     >
       <span className={cellFormat?.wrapText ? '' : 'truncate'}>{displayValue}</span>
     </div>
@@ -212,6 +235,7 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
   totalColumns = 100,
   data = null,
   emptyMessage,
+  yearsRow = null,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<GridImperativeAPI>(null);
@@ -365,19 +389,45 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
     [startRowResize]
   );
 
-  // Column headers with resize handles
+  // Build column classification map from yearsRow
+  const colClassMap = useMemo(() => {
+    const map = new Map<number, ColumnType>();
+    if (yearsRow) {
+      for (const col of yearsRow.columns) {
+        map.set(col.colIndex, col.columnType);
+      }
+    }
+    return map;
+  }, [yearsRow]);
+
+  // Column headers with resize handles and year classification styling
   const columnHeaders = useMemo(() => {
     const headers = [];
     for (let i = visibleColStart; i <= visibleColEnd; i++) {
+      const colType = colClassMap.get(i);
+      let headerClass = 'bg-muted text-muted-foreground';
+      let tooltip = '';
+      if (colType === 'historical') {
+        headerClass = 'bg-muted text-muted-foreground';
+        tooltip = 'Ano histórico';
+      } else if (colType === 'current') {
+        headerClass = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+        tooltip = 'Ano corrente';
+      } else if (colType === 'projection') {
+        headerClass = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold';
+        tooltip = 'Ano projetado';
+      }
+
       headers.push(
         <div
           key={i}
-          className="absolute border-r border-b border-border flex items-center justify-center text-xs font-medium text-muted-foreground bg-muted select-none"
+          className={`absolute border-r border-b border-border flex items-center justify-center text-xs font-medium select-none ${headerClass}`}
           style={{
             left: colOffsets[i],
             width: columnWidths[i],
             height: headerHeight,
           }}
+          title={tooltip || undefined}
         >
           {getColumnLetter(i)}
           {/* Resize handle on right edge */}
@@ -390,7 +440,7 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
       );
     }
     return headers;
-  }, [visibleColStart, visibleColEnd, colOffsets, columnWidths, headerHeight, handleColumnResizeMouseDown]);
+  }, [visibleColStart, visibleColEnd, colOffsets, columnWidths, headerHeight, handleColumnResizeMouseDown, colClassMap]);
 
   // Row numbers with resize handles
   const rowNumbers = useMemo(() => {
@@ -427,8 +477,9 @@ export const VirtualizedSpreadsheet: React.FC<VirtualizedSpreadsheetProps> = ({
       mergedSpans,
       columnWidths,
       rowHeights,
+      yearsRow,
     }),
-    [data, mergedHidden, mergedSpans, columnWidths, rowHeights]
+    [data, mergedHidden, mergedSpans, columnWidths, rowHeights, yearsRow]
   );
 
   // Variable-size getters for the Grid

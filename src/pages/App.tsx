@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import type { SpreadsheetData } from '@/types/spreadsheet';
+import type { SpreadsheetData, YearsRowData } from '@/types/spreadsheet';
 import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
@@ -14,6 +14,7 @@ import { FinancialResultInput } from '@/components/FinancialResultInput';
 import { TaxInput } from '@/components/TaxInput';
 import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
+import { detectYearsRow } from '@/utils/yearsRowDetector';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,8 @@ const Index = () => {
   const [activeRightTab, setActiveRightTab] = useState<RightTab>('financials');
   const [assumptionsSheetData, setAssumptionsSheetData] = useState<SpreadsheetData | null>(null);
   const [assumptionEntries, setAssumptionEntries] = useState<AssumptionEntry[]>([]);
+  const [yearsRowData, setYearsRowData] = useState<YearsRowData | null>(null);
+  const [yearsRowWarning, setYearsRowWarning] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Auto-copy left data to right whenever left changes during import step
@@ -85,17 +88,36 @@ const Index = () => {
     setActiveRightTab('financials');
     setAssumptionsSheetData(null);
     setAssumptionEntries([]);
+    setYearsRowData(null);
+    setYearsRowWarning(null);
     setStep('import');
   }, []);
 
   // Step 4: "Continuar" in modelling → add projection columns + advance to assumptions
-  const handleModellingContinue = useCallback((years: number) => {
+  const handleModellingContinue = useCallback((years: number, lastClosedYear: number) => {
     if (!originalRightData) return;
+
+    // Detect years row and classify columns
+    const detection = detectYearsRow(originalRightData, lastClosedYear);
+    if (detection.success && detection.data) {
+      setYearsRowData(detection.data);
+      setYearsRowWarning(null);
+    } else {
+      setYearsRowWarning(detection.warning || null);
+    }
 
     const projected = addProjectionColumns(originalRightData, years);
     setRightSpreadsheetData(projected);
     setProjectedBaseData(projected);
     setStep('assumptions');
+
+    // Re-detect after projection columns are added
+    if (detection.success && detection.data) {
+      const updatedDetection = detectYearsRow(projected, lastClosedYear);
+      if (updatedDetection.success && updatedDetection.data) {
+        setYearsRowData(updatedDetection.data);
+      }
+    }
 
     // Initialize the assumptions sheet (empty entries for now)
     const initialSheet = buildAssumptionsSheet([]);
@@ -103,7 +125,7 @@ const Index = () => {
 
     toast({
       title: `${years} ano${years > 1 ? 's' : ''} adicionado${years > 1 ? 's' : ''}!`,
-      description: 'Defina as premissas de projeção.',
+      description: `Projeção a partir de ${lastClosedYear + 1}. Defina as premissas.`,
     });
   }, [originalRightData, toast]);
 
@@ -442,7 +464,7 @@ const Index = () => {
   const renderLeftPanel = () => {
     switch (step) {
       case 'modelling':
-        return <FinancialModellingPanel onContinue={handleModellingContinue} />;
+        return <FinancialModellingPanel onContinue={handleModellingContinue} yearsRowWarning={yearsRowWarning} />;
       case 'assumptions':
         return <ProjectionAssumptions onApply={handleApplyRevenue} onContinue={handleAssumptionsContinue} hasApplied={hasAppliedRevenue} />;
       case 'deductions':
@@ -640,6 +662,7 @@ const Index = () => {
                   data={rightSpreadsheetData}
                   totalRows={1000}
                   totalColumns={100}
+                  yearsRow={yearsRowData}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center">

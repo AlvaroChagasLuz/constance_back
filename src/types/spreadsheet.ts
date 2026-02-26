@@ -39,3 +39,25 @@ export interface SpreadsheetData {
   startRow?: number; // row offset (0-indexed) if data doesn't start at row 0
   startCol?: number; // col offset (0-indexed) if data doesn't start at col 0
 }
+
+// ==================== Years Row Types ====================
+
+export type ColumnType = 'historical' | 'current' | 'projection';
+
+export interface YearsRowColumn {
+  year: number;
+  colIndex: number;
+  columnType: ColumnType;
+}
+
+export interface YearsRowData {
+  rowIndex: number;
+  lastClosedYear: number;
+  columns: YearsRowColumn[];
+}
+
+export interface YearsRowDetectionResult {
+  success: boolean;
+  data?: YearsRowData;
+  warning?: string;
+}
