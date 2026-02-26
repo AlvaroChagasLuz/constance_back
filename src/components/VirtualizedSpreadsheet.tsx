@@ -101,9 +101,11 @@ const Cell = ({
     }
 
     if (num !== null) {
+      // Years (1990-2099) displayed as integers
+      const isYear = Number.isInteger(num) && num >= 1990 && num <= 2099;
       displayValue = num.toLocaleString('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: isYear ? 0 : 2,
+        maximumFractionDigits: isYear ? 0 : 2,
       });
     } else {
       displayValue = String(cellValue);
