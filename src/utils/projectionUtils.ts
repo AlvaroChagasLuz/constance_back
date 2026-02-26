@@ -130,6 +130,36 @@ export function addProjectionColumns(data: SpreadsheetData, numYears: number): S
     }
   }
 
+  // Equalize all year column widths to the maximum width among them
+  const totalColCount = data.colCount + numYears;
+  const yearColIndices: number[] = [];
+  if (detected) {
+    // Find all columns in the header row that contain year values (1990-2099)
+    const headerRow = newValues[detected.row];
+    if (headerRow) {
+      for (let c = 0; c < totalColCount; c++) {
+        const val = headerRow[c];
+        if (val == null) continue;
+        const str = String(val).trim();
+        const num = parseInt(str, 10);
+        if (num >= 1990 && num <= 2099 && String(num) === str) {
+          yearColIndices.push(c);
+        }
+      }
+    }
+  }
+
+  if (yearColIndices.length > 0) {
+    // Ensure newColumnWidths covers all columns
+    while (newColumnWidths.length < totalColCount) {
+      newColumnWidths.push(100);
+    }
+    const maxWidth = Math.max(...yearColIndices.map(c => newColumnWidths[c] || 100));
+    for (const c of yearColIndices) {
+      newColumnWidths[c] = maxWidth;
+    }
+  }
+
   return {
     values: newValues,
     formulas: newFormulas,
@@ -138,7 +168,7 @@ export function addProjectionColumns(data: SpreadsheetData, numYears: number): S
     columnWidths: newColumnWidths,
     rowHeights: newRowHeights,
     rowCount: data.rowCount,
-    colCount: data.colCount + numYears,
+    colCount: totalColCount,
     startRow: data.startRow,
     startCol: data.startCol,
   };
