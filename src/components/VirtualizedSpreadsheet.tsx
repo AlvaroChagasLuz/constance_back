@@ -102,7 +102,7 @@ const Cell = ({
 
     if (num !== null) {
       displayValue = num.toLocaleString('pt-BR', {
-        minimumFractionDigits: 0,
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       });
     } else {
