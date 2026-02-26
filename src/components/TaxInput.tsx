@@ -122,32 +122,6 @@ export const TaxInput: React.FC<TaxInputProps> = ({
           </p>
         </div>
 
-        {/* Real-time preview */}
-        {preview && (
-          <div className="w-full rounded-lg border border-border bg-muted/30 p-4 space-y-2">
-            <p className="text-xs font-medium text-muted-foreground mb-2">Preview (1º período projetado)</p>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">EBT (Lucro antes do IR)</span>
-              <span className="font-medium text-foreground">{formatBRL(preview.ebt)}</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">(−) Impostos / Tax</span>
-              <span className="font-medium text-destructive">{formatBRL(-preview.tax)}</span>
-            </div>
-            <div className="border-t border-border my-1" />
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground font-medium">(=) Lucro Líquido / Net Income</span>
-              <span className={`font-semibold ${preview.netIncome >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-                {formatBRL(preview.netIncome)}
-              </span>
-            </div>
-            {preview.ebt < 0 && (
-              <p className="text-xs text-amber-600 mt-1 italic">
-                EBT negativo: imposto zerado (sem crédito fiscal).
-              </p>
-            )}
-          </div>
-        )}
 
         {/* Buttons */}
         <div className="w-full flex flex-col gap-2">
