@@ -148,9 +148,7 @@ const Cell = ({
     if (cellFormat.textColor) {
       cellStyle.color = cellFormat.textColor;
     }
-    if (cellFormat.fontSize) {
-      cellStyle.fontSize = `${cellFormat.fontSize}pt`;
-    }
+    // fontSize intentionally ignored — uniform size across spreadsheet
     if (cellFormat.bold) {
       cellStyle.fontWeight = 'bold';
     }
