@@ -14,7 +14,7 @@ import { FinancialResultInput } from '@/components/FinancialResultInput';
 import { TaxInput } from '@/components/TaxInput';
 import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
-import { detectYearsRow } from '@/utils/yearsRowDetector';
+import { detectYearsRow, detectLastYearFromData } from '@/utils/yearsRowDetector';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -94,8 +94,11 @@ const Index = () => {
   }, []);
 
   // Step 4: "Continuar" in modelling → add projection columns + advance to assumptions
-  const handleModellingContinue = useCallback((years: number, lastClosedYear: number) => {
+  const handleModellingContinue = useCallback((years: number) => {
     if (!originalRightData) return;
+
+    // Auto-detect last closed year from data
+    const lastClosedYear = detectLastYearFromData(originalRightData) ?? (new Date().getFullYear() - 1);
 
     // Detect years row and classify columns
     const detection = detectYearsRow(originalRightData, lastClosedYear);
@@ -112,7 +115,7 @@ const Index = () => {
     setStep('assumptions');
 
     // Re-detect after projection columns are added
-    if (detection.success && detection.data) {
+    if (detection.success) {
       const updatedDetection = detectYearsRow(projected, lastClosedYear);
       if (updatedDetection.success && updatedDetection.data) {
         setYearsRowData(updatedDetection.data);
