@@ -203,9 +203,9 @@ const SignIn = () => {
           {/* Sign Up Link */}
           <p className="text-center mt-8 text-muted-foreground">
             {t('signin.noAccount')}{' '}
-            <Link to="/signup" className="text-primary font-semibold hover:text-primary/80 transition-colors">
+            <a href="/signup" target="_blank" rel="noopener noreferrer" className="text-primary font-semibold hover:text-primary/80 transition-colors">
               {t('signin.signUp')}
-            </Link>
+            </a>
           </p>
         </div>
       </div>
