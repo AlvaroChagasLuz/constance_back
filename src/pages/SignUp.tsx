@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import constanceLogo from '@/assets/constance-logo.png';
 import constanceIcon from '@/assets/constance-icon.png';
 import { Eye, EyeOff, Mail, Lock, User } from 'lucide-react';
@@ -18,11 +20,48 @@ const SignUp = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (password !== confirmPassword) {
+      toast.error(language === 'pt' ? 'As senhas não coincidem' : 'Passwords do not match');
+      return;
+    }
+
+    if (password.length < 6) {
+      toast.error(language === 'pt' ? 'A senha deve ter pelo menos 6 caracteres' : 'Password must be at least 6 characters');
+      return;
+    }
+
     setIsLoading(true);
-    // Placeholder for future authentication
-    setTimeout(() => setIsLoading(false), 1000);
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: name },
+          emailRedirectTo: window.location.origin,
+        },
+      });
+
+      if (error) {
+        toast.error(error.message);
+      } else {
+        toast.success(
+          language === 'pt'
+            ? 'Conta criada! Verifique seu e-mail para confirmar o cadastro.'
+            : 'Account created! Check your email to confirm your registration.'
+        );
+        setName('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+      }
+    } catch {
+      toast.error(language === 'pt' ? 'Erro inesperado. Tente novamente.' : 'Unexpected error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const t = (key: string) => {
