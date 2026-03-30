@@ -1,7 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import type { SpreadsheetData, YearsRowData } from '@/types/spreadsheet';
-import type { FCFAssumptions, WACCParameters, TerminalValueParameters, EquityBridgeParameters, ProjectedYear, ValuationResult, WACCResult, SensitivityMatrix } from '@/engine/types';
+import type { SpreadsheetData } from '@/types/spreadsheet';
 import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
@@ -18,387 +17,26 @@ import { WACCInput } from '@/components/WACCInput';
 import { TerminalValueInput } from '@/components/TerminalValueInput';
 import { EquityBridgeInput } from '@/components/EquityBridgeInput';
 import { ValuationResultsPanel } from '@/components/ValuationResultsPanel';
-import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
-import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
-import { detectYearsRow, detectLastYearFromData } from '@/utils/yearsRowDetector';
-import { calculateWACC } from '@/engine/wacc';
-import { buildFCFProjections } from '@/engine/fcf';
-import { runDCFValuation } from '@/engine/dcf';
-import { buildWACCvsGrowthSensitivity } from '@/engine/sensitivity';
-import {
-  findRevenueRow, findDeductionsRow, findNetRevenueRow, findCOGSRow,
-  findGrossProfitRow, findSGARow, findEBITDARow, findDARow, findEBITRow,
-  findFinancialResultRow, findEBTRow, findTaxRow, findNetIncomeRow,
-} from '@/utils/projectionUtils';
-import { useToast } from '@/hooks/use-toast';
+import { useValuationEngine } from '@/hooks/useValuationEngine';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download, Factory, Percent, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result' | 'tax' | 'capex_wc' | 'wacc' | 'terminal_value' | 'equity_bridge' | 'results';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
-  const [leftSpreadsheetData, setLeftSpreadsheetData] = useState<SpreadsheetData | null>(null);
-  const [rightSpreadsheetData, setRightSpreadsheetData] = useState<SpreadsheetData | null>(null);
-  const [baseSheetData, setBaseSheetData] = useState<SpreadsheetData | null>(null);
-  const [originalRightData, setOriginalRightData] = useState<SpreadsheetData | null>(null);
-  const [projectedBaseData, setProjectedBaseData] = useState<SpreadsheetData | null>(null);
-  const [originalColCount, setOriginalColCount] = useState<number>(0);
-  const [hasAppliedRevenue, setHasAppliedRevenue] = useState(false);
-  const [step, setStep] = useState<AppStep>('import');
+  const [state, actions] = useValuationEngine();
   const [activeRightTab, setActiveRightTab] = useState<RightTab>('financials');
-  const [assumptionsSheetData, setAssumptionsSheetData] = useState<SpreadsheetData | null>(null);
-  const [assumptionEntries, setAssumptionEntries] = useState<AssumptionEntry[]>([]);
-  const [yearsRowData, setYearsRowData] = useState<YearsRowData | null>(null);
-  const [yearsRowWarning, setYearsRowWarning] = useState<string | null>(null);
 
-  // Valuation state
-  const [fcfAssumptions, setFcfAssumptions] = useState<FCFAssumptions | null>(null);
-  const [waccParams, setWaccParams] = useState<WACCParameters | null>(null);
-  const [waccResult, setWaccResult] = useState<WACCResult | null>(null);
-  const [tvParams, setTvParams] = useState<TerminalValueParameters | null>(null);
-  const [equityBridgeParams, setEquityBridgeParams] = useState<EquityBridgeParameters | null>(null);
-  const [projectedYears, setProjectedYears] = useState<ProjectedYear[]>([]);
-  const [valuationResult, setValuationResult] = useState<ValuationResult | null>(null);
-  const [sensitivityGrowth, setSensitivityGrowth] = useState<SensitivityMatrix | null>(null);
-  const [taxRateForValuation, setTaxRateForValuation] = useState(34);
-
-  const { toast } = useToast();
-
-  // Auto-copy left data to right whenever left changes during import step
-  useEffect(() => {
-    if (step !== 'import') return;
-
-    if (leftSpreadsheetData) {
-      const deepCopy = (src: SpreadsheetData): SpreadsheetData => ({
-        values: src.values.map(row => [...row]),
-        formulas: src.formulas?.map(row => [...row]),
-        formats: src.formats?.map(row => row.map(f => f ? { ...f } : null)),
-        mergedCells: src.mergedCells?.map(m => ({ ...m })),
-        columnWidths: src.columnWidths ? [...src.columnWidths] : undefined,
-        rowHeights: src.rowHeights ? [...src.rowHeights] : undefined,
-        rowCount: src.rowCount,
-        colCount: src.colCount,
-        startRow: src.startRow,
-        startCol: src.startCol,
-      });
-      const copiedData = deepCopy(leftSpreadsheetData);
-      setBaseSheetData(deepCopy(leftSpreadsheetData));
-      setRightSpreadsheetData(copiedData);
-      setOriginalRightData(copiedData);
-      setOriginalColCount(copiedData.colCount);
-      setStep('confirm');
-    } else {
-      setRightSpreadsheetData(null);
-      setBaseSheetData(null);
-    }
-  }, [leftSpreadsheetData]);
-
-  const handleConfirm = useCallback(() => {
-    setStep('modelling');
-    toast({
-      title: 'Dados confirmados!',
-      description: 'Configure a modelagem financeira no painel esquerdo.',
-    });
-  }, [toast]);
-
-  const handleReject = useCallback(() => {
-    setLeftSpreadsheetData(null);
-    setRightSpreadsheetData(null);
-    setBaseSheetData(null);
-    setOriginalRightData(null);
-    setProjectedBaseData(null);
-    setOriginalColCount(0);
-    setHasAppliedRevenue(false);
-    setActiveRightTab('financials');
-    setAssumptionsSheetData(null);
-    setAssumptionEntries([]);
-    setYearsRowData(null);
-    setYearsRowWarning(null);
-    setFcfAssumptions(null);
-    setWaccParams(null);
-    setWaccResult(null);
-    setTvParams(null);
-    setEquityBridgeParams(null);
-    setProjectedYears([]);
-    setValuationResult(null);
-    setSensitivityGrowth(null);
-    setStep('import');
-  }, []);
-
-  const handleModellingContinue = useCallback((years: number) => {
-    if (!originalRightData) return;
-
-    const lastClosedYear = detectLastYearFromData(originalRightData) ?? (new Date().getFullYear() - 1);
-    const detection = detectYearsRow(originalRightData, lastClosedYear);
-    if (detection.success && detection.data) {
-      setYearsRowData(detection.data);
-      setYearsRowWarning(null);
-    } else {
-      setYearsRowWarning(detection.warning || null);
-    }
-
-    const projected = addProjectionColumns(originalRightData, years);
-    setRightSpreadsheetData(projected);
-    setProjectedBaseData(projected);
-    setStep('assumptions');
-
-    if (detection.success) {
-      const updatedDetection = detectYearsRow(projected, lastClosedYear);
-      if (updatedDetection.success && updatedDetection.data) {
-        setYearsRowData(updatedDetection.data);
-      }
-    }
-
-    const initialSheet = buildAssumptionsSheet([]);
-    setAssumptionsSheetData(initialSheet);
-
-    toast({
-      title: `${years} ano${years > 1 ? 's' : ''} adicionado${years > 1 ? 's' : ''}!`,
-      description: `Projeção a partir de ${lastClosedYear + 1}. Defina as premissas.`,
-    });
-  }, [originalRightData, toast]);
-
-  const handleApplyRevenue = useCallback((revenueGrowthRate: number) => {
-    if (!projectedBaseData) return;
-
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'Taxa de Crescimento de Receita'),
-      { category: 'Receita', label: 'Taxa de Crescimento de Receita', value: revenueGrowthRate, unit: '% a.a.' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('Taxa de Crescimento de Receita');
-
-    const projected = applyRevenueProjection(projectedBaseData, revenueGrowthRate, originalColCount, premissasRow);
-    setRightSpreadsheetData(projected);
-    setHasAppliedRevenue(true);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
-    toast({ title: 'Projeção de receita aplicada!', description: `Taxa de crescimento: ${revenueGrowthRate}% ao ano` });
-  }, [projectedBaseData, originalColCount, assumptionEntries, toast]);
-
-  const handleAssumptionsContinue = useCallback(() => {
-    setStep('deductions');
-    toast({ title: 'Projeção de receita confirmada!', description: 'Defina as deduções sobre a receita bruta.' });
-  }, [toast]);
-
-  const handleDeductionsBack = useCallback(() => { setStep('assumptions'); }, []);
-
-  const handleDeductionsContinue = useCallback((deductionsPercent: number) => {
-    if (!rightSpreadsheetData) return;
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'Deduções sobre Receita Bruta'),
-      { category: 'Deduções', label: 'Deduções sobre Receita Bruta', value: deductionsPercent, unit: '% da Receita Bruta' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('Deduções sobre Receita Bruta');
-    const updated = applyDeductionsProjection(rightSpreadsheetData, deductionsPercent, originalColCount, premissasRow);
-    setRightSpreadsheetData(updated);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-    setStep('cogs');
-    toast({ title: 'Deduções aplicadas!', description: `${deductionsPercent}% de deduções projetadas.` });
-  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
-
-  const handleCOGSBack = useCallback(() => { setStep('deductions'); }, []);
-
-  const handleCOGSContinue = useCallback((cogsPercent: number) => {
-    if (!rightSpreadsheetData) return;
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'Custo (CMV) sobre Receita Líquida'),
-      { category: 'Custos', label: 'Custo (CMV) sobre Receita Líquida', value: cogsPercent, unit: '% da Receita Líquida' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('Custo (CMV) sobre Receita Líquida');
-    const updated = applyCOGSProjection(rightSpreadsheetData, cogsPercent, originalColCount, premissasRow);
-    setRightSpreadsheetData(updated);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-    setStep('sga');
-    toast({ title: 'Custos aplicados!', description: `${cogsPercent}% de CMV projetado.` });
-  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
-
-  const handleSGABack = useCallback(() => { setStep('cogs'); }, []);
-
-  const handleSGAContinue = useCallback((sgaPercent: number) => {
-    if (!rightSpreadsheetData) return;
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'Despesas (SG&A) sobre Lucro Bruto'),
-      { category: 'Despesas', label: 'Despesas (SG&A) sobre Lucro Bruto', value: sgaPercent, unit: '% do Lucro Bruto' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('Despesas (SG&A) sobre Lucro Bruto');
-    const updated = applySGAProjection(rightSpreadsheetData, sgaPercent, originalColCount, premissasRow);
-    setRightSpreadsheetData(updated);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-    setStep('da');
-    toast({ title: 'Despesas aplicadas!', description: `${sgaPercent}% de SG&A projetado.` });
-  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
-
-  const handleDABack = useCallback(() => { setStep('sga'); }, []);
-
-  const handleDAContinue = useCallback((daPercent: number) => {
-    if (!rightSpreadsheetData) return;
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'D&A sobre Receita Líquida'),
-      { category: 'D&A', label: 'D&A sobre Receita Líquida', value: daPercent, unit: '% da Receita Líquida' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('D&A sobre Receita Líquida');
-    const updated = applyDAProjection(rightSpreadsheetData, daPercent, originalColCount, premissasRow);
-    setRightSpreadsheetData(updated);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-    setStep('financial_result');
-    toast({ title: 'D&A aplicada!', description: `${daPercent}% de D&A projetado.` });
-  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
-
-  const handleFinancialResultBack = useCallback(() => { setStep('da'); }, []);
-
-  const handleFinancialResultContinue = useCallback((financialResultPercent: number) => {
-    if (!rightSpreadsheetData) return;
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'Resultado Financeiro sobre Receita Líquida'),
-      { category: 'Resultado Financeiro', label: 'Resultado Financeiro sobre Receita Líquida', value: financialResultPercent, unit: '% da Receita Líquida' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('Resultado Financeiro sobre Receita Líquida');
-    const updated = applyFinancialResultProjection(rightSpreadsheetData, financialResultPercent, originalColCount, premissasRow);
-    setRightSpreadsheetData(updated);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-    setStep('tax');
-    toast({ title: 'Resultado Financeiro aplicado!', description: `${financialResultPercent}% projetado.` });
-  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
-
-  const handleTaxBack = useCallback(() => { setStep('financial_result'); }, []);
-
-  const handleTaxContinue = useCallback((taxPercent: number) => {
-    if (!rightSpreadsheetData) return;
-    const newEntries: AssumptionEntry[] = [
-      ...assumptionEntries.filter(e => e.label !== 'Impostos sobre EBT'),
-      { category: 'Impostos', label: 'Impostos sobre EBT', value: taxPercent, unit: '% do EBT' },
-    ];
-    const rowMap = buildAssumptionsRowMap(newEntries);
-    const premissasRow = rowMap.get('Impostos sobre EBT');
-    const updated = applyTaxProjection(rightSpreadsheetData, taxPercent, originalColCount, premissasRow);
-    setRightSpreadsheetData(updated);
-    setAssumptionEntries(newEntries);
-    setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-    setTaxRateForValuation(taxPercent);
-    setStep('capex_wc');
-    toast({ title: 'Impostos aplicados!', description: `${taxPercent}% de imposto projetado.` });
-  }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
-
-  // ==================== New DCF Steps ====================
-
-  const handleCapexWCBack = useCallback(() => { setStep('tax'); }, []);
-
-  const handleCapexWCContinue = useCallback((assumptions: FCFAssumptions) => {
-    setFcfAssumptions(assumptions);
-    setStep('wacc');
-    toast({ title: 'CapEx & Capital de Giro definidos!', description: 'Defina o WACC.' });
-  }, [toast]);
-
-  const handleWACCBack = useCallback(() => { setStep('capex_wc'); }, []);
-
-  const handleWACCContinue = useCallback((params: WACCParameters) => {
-    setWaccParams(params);
-    const result = calculateWACC(params);
-    setWaccResult(result);
-    setStep('terminal_value');
-    toast({ title: `WACC: ${result.wacc.toFixed(2)}%`, description: 'Defina o Valor Terminal.' });
-  }, [toast]);
-
-  const handleTerminalValueBack = useCallback(() => { setStep('wacc'); }, []);
-
-  const handleTerminalValueContinue = useCallback((params: TerminalValueParameters) => {
-    setTvParams(params);
-    setStep('equity_bridge');
-    toast({ title: 'Valor Terminal definido!', description: 'Defina o Equity Bridge.' });
-  }, [toast]);
-
-  const handleEquityBridgeBack = useCallback(() => { setStep('terminal_value'); }, []);
-
-  const handleEquityBridgeContinue = useCallback((params: EquityBridgeParameters) => {
-    if (!rightSpreadsheetData || !fcfAssumptions || !waccResult || !tvParams) return;
-
-    setEquityBridgeParams(params);
-
-    // Extract income statement row indices
-    const rowFinders = {
-      grossRevenue: findRevenueRow(rightSpreadsheetData),
-      deductions: findDeductionsRow(rightSpreadsheetData),
-      netRevenue: findNetRevenueRow(rightSpreadsheetData),
-      cogs: findCOGSRow(rightSpreadsheetData),
-      grossProfit: findGrossProfitRow(rightSpreadsheetData),
-      sga: findSGARow(rightSpreadsheetData),
-      ebitda: findEBITDARow(rightSpreadsheetData),
-      da: findDARow(rightSpreadsheetData),
-      ebit: findEBITRow(rightSpreadsheetData),
-      financialResult: findFinancialResultRow(rightSpreadsheetData),
-      ebt: findEBTRow(rightSpreadsheetData),
-      tax: findTaxRow(rightSpreadsheetData),
-      netIncome: findNetIncomeRow(rightSpreadsheetData),
-    };
-
-    const getVal = (row: number | null, col: number) => {
-      if (row === null) return 0;
-      const v = rightSpreadsheetData.values[row]?.[col];
-      if (v == null) return 0;
-      return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
-    };
-
-    // Build income statement data for each projected column
-    const incomeData = [];
-    for (let c = originalColCount; c < rightSpreadsheetData.colCount; c++) {
-      const yearLabel = rightSpreadsheetData.values[0]?.[c];
-      incomeData.push({
-        year: String(yearLabel ?? (c - originalColCount + 1)),
-        colIndex: c,
-        grossRevenue: getVal(rowFinders.grossRevenue, c),
-        deductions: getVal(rowFinders.deductions, c),
-        netRevenue: getVal(rowFinders.netRevenue, c),
-        cogs: getVal(rowFinders.cogs, c),
-        grossProfit: getVal(rowFinders.grossProfit, c),
-        sga: getVal(rowFinders.sga, c),
-        ebitda: getVal(rowFinders.ebitda, c),
-        da: getVal(rowFinders.da, c),
-        ebit: getVal(rowFinders.ebit, c),
-        financialResult: getVal(rowFinders.financialResult, c),
-        ebt: getVal(rowFinders.ebt, c),
-        tax: getVal(rowFinders.tax, c),
-        netIncome: getVal(rowFinders.netIncome, c),
-      });
-    }
-
-    // Get last historical net revenue for ΔWC calculation
-    const lastHistNetRev = originalColCount > 0 ? getVal(rowFinders.netRevenue, originalColCount - 1) : 0;
-
-    // Build FCF projections
-    const years = buildFCFProjections(incomeData, fcfAssumptions, taxRateForValuation, lastHistNetRev);
-
-    // Run DCF valuation (applies discounting + terminal value + equity bridge)
-    const result = runDCFValuation(years, waccResult.wacc, tvParams, params);
-
-    setProjectedYears(years);
-    setValuationResult(result);
-
-    // Sensitivity
-    if (tvParams.method === 'gordon_growth' || tvParams.method === 'both') {
-      const sens = buildWACCvsGrowthSensitivity(years, waccResult.wacc, tvParams, params);
-      setSensitivityGrowth(sens);
-    }
-
-    setStep('results');
-    toast({ title: 'Valuation calculado!', description: 'Veja os resultados.' });
-  }, [rightSpreadsheetData, originalColCount, fcfAssumptions, waccResult, tvParams, taxRateForValuation, toast]);
-
-  const handleResultsBack = useCallback(() => { setStep('equity_bridge'); }, []);
+  const {
+    step, leftSpreadsheetData, rightSpreadsheetData, baseSheetData,
+    originalColCount, assumptionsSheetData, assumptionEntries,
+    yearsRowData, yearsRowWarning, hasAppliedRevenue,
+    waccParams, tvParams, equityBridge,
+    waccResult, projectedYears, valuationResult,
+    sensitivityGrowth, sensitivityMultiple,
+  } = state;
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {
@@ -487,29 +125,29 @@ const Index = () => {
   const renderLeftPanel = () => {
     switch (step) {
       case 'modelling':
-        return <FinancialModellingPanel onContinue={handleModellingContinue} yearsRowWarning={yearsRowWarning} />;
+        return <FinancialModellingPanel onContinue={actions.handleModellingContinue} yearsRowWarning={yearsRowWarning} />;
       case 'assumptions':
-        return <ProjectionAssumptions onApply={handleApplyRevenue} onContinue={handleAssumptionsContinue} hasApplied={hasAppliedRevenue} />;
+        return <ProjectionAssumptions onApply={actions.handleApplyRevenue} onContinue={actions.handleAssumptionsContinue} hasApplied={hasAppliedRevenue} />;
       case 'deductions':
-        return <RevenueDeductions onBack={handleDeductionsBack} onContinue={handleDeductionsContinue} />;
+        return <RevenueDeductions onBack={actions.handleStepBack} onContinue={actions.handleDeductionsContinue} />;
       case 'cogs':
-        return <COGSInput onBack={handleCOGSBack} onContinue={handleCOGSContinue} />;
+        return <COGSInput onBack={actions.handleStepBack} onContinue={actions.handleCOGSContinue} />;
       case 'sga':
-        return <SGAInput onBack={handleSGABack} onContinue={handleSGAContinue} />;
+        return <SGAInput onBack={actions.handleStepBack} onContinue={actions.handleSGAContinue} />;
       case 'da':
-        return <DAInput onBack={handleDABack} onContinue={handleDAContinue} />;
+        return <DAInput onBack={actions.handleStepBack} onContinue={actions.handleDAContinue} />;
       case 'financial_result':
-        return <FinancialResultInput onBack={handleFinancialResultBack} onContinue={handleFinancialResultContinue} />;
+        return <FinancialResultInput onBack={actions.handleStepBack} onContinue={actions.handleFinancialResultContinue} />;
       case 'tax':
-        return <TaxInput ebt={getProjectedEBT(rightSpreadsheetData!, originalColCount)} onBack={handleTaxBack} onContinue={handleTaxContinue} />;
+        return <TaxInput ebt={actions.getProjectedEBTValue()} onBack={actions.handleStepBack} onContinue={actions.handleTaxContinue} />;
       case 'capex_wc':
-        return <CapexWCInput onBack={handleCapexWCBack} onContinue={handleCapexWCContinue} />;
+        return <CapexWCInput onBack={actions.handleStepBack} onContinue={actions.handleCapexWCContinue} />;
       case 'wacc':
-        return <WACCInput initialParams={waccParams ?? undefined} onBack={handleWACCBack} onContinue={handleWACCContinue} />;
+        return <WACCInput initialParams={waccParams ?? undefined} onBack={actions.handleStepBack} onContinue={actions.handleWACCContinue} />;
       case 'terminal_value':
-        return <TerminalValueInput initialParams={tvParams ?? undefined} onBack={handleTerminalValueBack} onContinue={handleTerminalValueContinue} />;
+        return <TerminalValueInput initialParams={tvParams ?? undefined} onBack={actions.handleStepBack} onContinue={actions.handleTerminalValueContinue} />;
       case 'equity_bridge':
-        return <EquityBridgeInput initialParams={equityBridgeParams ?? undefined} onBack={handleEquityBridgeBack} onContinue={handleEquityBridgeContinue} />;
+        return <EquityBridgeInput initialParams={equityBridge ?? undefined} onBack={actions.handleStepBack} onContinue={actions.handleEquityBridgeContinue} />;
       case 'results':
         return valuationResult && waccResult ? (
           <ValuationResultsPanel
@@ -517,13 +155,13 @@ const Index = () => {
             waccResult={waccResult}
             projectedYears={projectedYears}
             sensitivityGrowth={sensitivityGrowth}
-            sensitivityMultiple={null}
+            sensitivityMultiple={sensitivityMultiple}
             currency="BRL"
-            onBack={handleResultsBack}
+            onBack={actions.handleStepBack}
           />
         ) : null;
       default:
-        return <ExcelUpload data={leftSpreadsheetData} onDataLoaded={setLeftSpreadsheetData} />;
+        return <ExcelUpload data={leftSpreadsheetData} onDataLoaded={actions.setLeftSpreadsheetData} />;
     }
   };
 
@@ -658,7 +296,7 @@ const Index = () => {
           {/* Spreadsheet content */}
           <div className="flex-1 overflow-hidden border-t border-border relative">
             {step === 'confirm' && activeRightTab === 'financials' && (
-              <ConfirmationBanner onConfirm={handleConfirm} onReject={handleReject} />
+              <ConfirmationBanner onConfirm={actions.handleConfirm} onReject={actions.handleReject} />
             )}
             {activeRightTab === 'financials' ? (
               rightSpreadsheetData ? (
