@@ -22,7 +22,14 @@ import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection
 import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { detectYearsRow, detectLastYearFromData } from '@/utils/yearsRowDetector';
 import { calculateWACC } from '@/engine/wacc';
-import { buildProjectedYears, calculateValuation, buildSensitivityGrowth } from '@/engine/valuation';
+import { buildFCFProjections } from '@/engine/fcf';
+import { runDCFValuation } from '@/engine/dcf';
+import { buildWACCvsGrowthSensitivity } from '@/engine/sensitivity';
+import {
+  findRevenueRow, findDeductionsRow, findNetRevenueRow, findCOGSRow,
+  findGrossProfitRow, findSGARow, findEBITDARow, findDARow, findEBITRow,
+  findFinancialResultRow, findEBTRow, findTaxRow, findNetIncomeRow,
+} from '@/utils/projectionUtils';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download, Factory, Percent, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -322,16 +329,68 @@ const Index = () => {
 
     setEquityBridgeParams(params);
 
-    // Build projected years & compute valuation
-    const years = buildProjectedYears(rightSpreadsheetData, originalColCount, fcfAssumptions, waccResult, taxRateForValuation);
-    setProjectedYears(years);
+    // Extract income statement row indices
+    const rowFinders = {
+      grossRevenue: findRevenueRow(rightSpreadsheetData),
+      deductions: findDeductionsRow(rightSpreadsheetData),
+      netRevenue: findNetRevenueRow(rightSpreadsheetData),
+      cogs: findCOGSRow(rightSpreadsheetData),
+      grossProfit: findGrossProfitRow(rightSpreadsheetData),
+      sga: findSGARow(rightSpreadsheetData),
+      ebitda: findEBITDARow(rightSpreadsheetData),
+      da: findDARow(rightSpreadsheetData),
+      ebit: findEBITRow(rightSpreadsheetData),
+      financialResult: findFinancialResultRow(rightSpreadsheetData),
+      ebt: findEBTRow(rightSpreadsheetData),
+      tax: findTaxRow(rightSpreadsheetData),
+      netIncome: findNetIncomeRow(rightSpreadsheetData),
+    };
 
-    const result = calculateValuation(years, waccResult, tvParams, params);
+    const getVal = (row: number | null, col: number) => {
+      if (row === null) return 0;
+      const v = rightSpreadsheetData.values[row]?.[col];
+      if (v == null) return 0;
+      return typeof v === 'number' ? v : parseFloat(String(v)) || 0;
+    };
+
+    // Build income statement data for each projected column
+    const incomeData = [];
+    for (let c = originalColCount; c < rightSpreadsheetData.colCount; c++) {
+      const yearLabel = rightSpreadsheetData.values[0]?.[c];
+      incomeData.push({
+        year: String(yearLabel ?? (c - originalColCount + 1)),
+        colIndex: c,
+        grossRevenue: getVal(rowFinders.grossRevenue, c),
+        deductions: getVal(rowFinders.deductions, c),
+        netRevenue: getVal(rowFinders.netRevenue, c),
+        cogs: getVal(rowFinders.cogs, c),
+        grossProfit: getVal(rowFinders.grossProfit, c),
+        sga: getVal(rowFinders.sga, c),
+        ebitda: getVal(rowFinders.ebitda, c),
+        da: getVal(rowFinders.da, c),
+        ebit: getVal(rowFinders.ebit, c),
+        financialResult: getVal(rowFinders.financialResult, c),
+        ebt: getVal(rowFinders.ebt, c),
+        tax: getVal(rowFinders.tax, c),
+        netIncome: getVal(rowFinders.netIncome, c),
+      });
+    }
+
+    // Get last historical net revenue for ΔWC calculation
+    const lastHistNetRev = originalColCount > 0 ? getVal(rowFinders.netRevenue, originalColCount - 1) : 0;
+
+    // Build FCF projections
+    const years = buildFCFProjections(incomeData, fcfAssumptions, taxRateForValuation, lastHistNetRev);
+
+    // Run DCF valuation (applies discounting + terminal value + equity bridge)
+    const result = runDCFValuation(years, waccResult.wacc, tvParams, params);
+
+    setProjectedYears(years);
     setValuationResult(result);
 
     // Sensitivity
     if (tvParams.method === 'gordon_growth' || tvParams.method === 'both') {
-      const sens = buildSensitivityGrowth(years, waccResult.wacc, tvParams.perpetuityGrowthRate, params);
+      const sens = buildWACCvsGrowthSensitivity(years, waccResult.wacc, tvParams, params);
       setSensitivityGrowth(sens);
     }
 
