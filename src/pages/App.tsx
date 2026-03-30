@@ -22,7 +22,14 @@ import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection
 import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { detectYearsRow, detectLastYearFromData } from '@/utils/yearsRowDetector';
 import { calculateWACC } from '@/engine/wacc';
-import { buildProjectedYears, calculateValuation, buildSensitivityGrowth } from '@/engine/valuation';
+import { buildFCFProjections } from '@/engine/fcf';
+import { runDCFValuation } from '@/engine/dcf';
+import { buildWACCvsGrowthSensitivity } from '@/engine/sensitivity';
+import {
+  findRevenueRow, findDeductionsRow, findNetRevenueRow, findCOGSRow,
+  findGrossProfitRow, findSGARow, findEBITDARow, findDARow, findEBITRow,
+  findFinancialResultRow, findEBTRow, findTaxRow, findNetIncomeRow,
+} from '@/utils/projectionUtils';
 import { useToast } from '@/hooks/use-toast';
 import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download, Factory, Percent, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
