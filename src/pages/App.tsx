@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { SpreadsheetData } from '@/types/spreadsheet';
 import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
@@ -18,110 +18,185 @@ import { TerminalValueInput } from '@/components/TerminalValueInput';
 import { EquityBridgeInput } from '@/components/EquityBridgeInput';
 import { ValuationResultsPanel } from '@/components/ValuationResultsPanel';
 import { useValuationEngine } from '@/hooks/useValuationEngine';
-import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download, Factory, Percent, Trophy } from 'lucide-react';
+import {
+  TrendingUp,
+  Table2,
+  Settings2,
+  ArrowLeft,
+  BarChart3,
+  FileSpreadsheet,
+  Download,
+  Factory,
+  Percent,
+  Infinity,
+  Scale,
+  Trophy,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
 type RightTab = 'base' | 'financials' | 'assumptions';
 
+// ============================================================================
+// Left panel tab config — maps step to label + icon
+// ============================================================================
+
+function getLeftTabConfig(step: string) {
+  switch (step) {
+    case 'modelling':
+      return { label: 'Modelagem Financeira', Icon: TrendingUp };
+    case 'assumptions':
+      return { label: 'Premissas de Projeção', Icon: BarChart3 };
+    case 'deductions':
+      return { label: 'Deduções de Receita', Icon: BarChart3 };
+    case 'cogs':
+      return { label: 'Custo (CMV)', Icon: BarChart3 };
+    case 'sga':
+      return { label: 'Despesas (SG&A)', Icon: BarChart3 };
+    case 'da':
+      return { label: 'D&A', Icon: BarChart3 };
+    case 'financial_result':
+      return { label: 'Resultado Financeiro', Icon: BarChart3 };
+    case 'tax':
+      return { label: 'Impostos / Tax', Icon: BarChart3 };
+    case 'capex_wc':
+      return { label: 'CapEx & Capital de Giro', Icon: Factory };
+    case 'wacc':
+      return { label: 'WACC — Custo de Capital', Icon: Percent };
+    case 'terminal_value':
+      return { label: 'Valor Terminal', Icon: Infinity };
+    case 'equity_bridge':
+      return { label: 'Equity Bridge', Icon: Scale };
+    case 'results':
+      return { label: 'Resultado do Valuation', Icon: Trophy };
+    default:
+      return { label: 'Dados Importados', Icon: Table2 };
+  }
+}
+
+// ============================================================================
+// Footer status text
+// ============================================================================
+
+function getFooterText(step: string, leftData: SpreadsheetData | null) {
+  const texts: Record<string, string> = {
+    modelling: 'Dados confirmados — Defina o número de anos',
+    assumptions: 'Colunas projetadas — Defina as premissas',
+    deductions: 'Receita projetada — Defina as deduções',
+    cogs: 'Deduções aplicadas — Defina o custo (CMV)',
+    sga: 'Custos aplicados — Defina as despesas (SG&A)',
+    da: 'Despesas aplicadas — Defina a D&A',
+    financial_result: 'D&A aplicada — Defina o Resultado Financeiro',
+    tax: 'Resultado Financeiro aplicado — Defina os Impostos',
+    capex_wc: 'Impostos aplicados — Defina CapEx e Capital de Giro',
+    wacc: 'FCF configurado — Defina o custo de capital (WACC)',
+    terminal_value: 'WACC calculado — Defina o Valor Terminal',
+    equity_bridge: 'Valor Terminal configurado — Defina a Equity Bridge',
+    results: 'Valuation concluído — Revise os resultados',
+  };
+
+  if (texts[step]) return texts[step];
+
+  return leftData
+    ? `Importado: ${leftData.rowCount} linhas × ${leftData.colCount} colunas — Espelhado automaticamente`
+    : 'Aguardando importação de dados...';
+}
+
+// ============================================================================
+// Excel export helper
+// ============================================================================
+
+function writeSheetFromSpreadsheetData(ws: ExcelJS.Worksheet, data: SpreadsheetData) {
+  const { values, formats, formulas, columnWidths } = data;
+  values.forEach((row, ri) => {
+    const excelRow = ws.addRow(row.map(v => v ?? ''));
+    row.forEach((_, ci) => {
+      const cell = excelRow.getCell(ci + 1);
+      const formula = formulas?.[ri]?.[ci];
+      if (formula) {
+        cell.value = { formula: formula.startsWith('=') ? formula.slice(1) : formula } as any;
+      }
+      const fmt = formats?.[ri]?.[ci];
+      if (!fmt) return;
+      if (fmt.bold || fmt.italic || fmt.underline || fmt.textColor || fmt.fontSize) {
+        cell.font = {
+          bold: fmt.bold,
+          italic: fmt.italic,
+          underline: fmt.underline ? 'single' : undefined,
+          color: fmt.textColor ? { argb: fmt.textColor.replace('#', 'FF') } : undefined,
+          size: fmt.fontSize,
+        };
+      }
+      if (fmt.bgColor) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fmt.bgColor.replace('#', 'FF') } };
+      }
+      if (fmt.horizontalAlignment) {
+        cell.alignment = { horizontal: fmt.horizontalAlignment as any, vertical: fmt.verticalAlignment as any, wrapText: fmt.wrapText };
+      }
+      if (fmt.numberFormat) {
+        cell.numFmt = fmt.numberFormat;
+      }
+    });
+  });
+  if (columnWidths) {
+    columnWidths.forEach((w, i) => {
+      ws.getColumn(i + 1).width = Math.max(w / 7, 8);
+    });
+  }
+}
+
+// ============================================================================
+// Main App Component
+// ============================================================================
+
 const Index = () => {
   const [state, actions] = useValuationEngine();
   const [activeRightTab, setActiveRightTab] = useState<RightTab>('financials');
 
   const {
-    step, leftSpreadsheetData, rightSpreadsheetData, baseSheetData,
-    originalColCount, assumptionsSheetData, assumptionEntries,
-    yearsRowData, yearsRowWarning, hasAppliedRevenue,
-    waccParams, tvParams, equityBridge,
-    waccResult, projectedYears, valuationResult,
-    sensitivityGrowth, sensitivityMultiple,
+    step,
+    leftSpreadsheetData,
+    rightSpreadsheetData,
+    baseSheetData,
+    assumptionsSheetData,
+    assumptionEntries,
+    yearsRowData,
+    yearsRowWarning,
+    hasAppliedRevenue,
+    waccParams,
+    tvParams,
+    equityBridge,
+    waccResult,
+    projectedYears,
+    valuationResult,
+    sensitivityGrowth,
+    sensitivityMultiple,
   } = state;
 
-  // Left panel tab label & icon based on current step
-  const getLeftTabConfig = () => {
-    switch (step) {
-      case 'modelling': return { label: 'Modelagem Financeira', Icon: TrendingUp };
-      case 'assumptions': return { label: 'Premissas de Projeção', Icon: BarChart3 };
-      case 'deductions': return { label: 'Deduções de Receita', Icon: BarChart3 };
-      case 'cogs': return { label: 'Custo (CMV)', Icon: BarChart3 };
-      case 'sga': return { label: 'Despesas (SG&A)', Icon: BarChart3 };
-      case 'da': return { label: 'D&A', Icon: BarChart3 };
-      case 'financial_result': return { label: 'Resultado Financeiro', Icon: BarChart3 };
-      case 'tax': return { label: 'Impostos / Tax', Icon: BarChart3 };
-      case 'capex_wc': return { label: 'CapEx & Capital de Giro', Icon: Factory };
-      case 'wacc': return { label: 'WACC', Icon: Percent };
-      case 'terminal_value': return { label: 'Valor Terminal', Icon: TrendingUp };
-      case 'equity_bridge': return { label: 'Equity Bridge', Icon: BarChart3 };
-      case 'results': return { label: 'Resultado do Valuation', Icon: Trophy };
-      default: return { label: 'Dados Importados', Icon: Table2 };
-    }
-  };
+  const { label: leftTabLabel, Icon: LeftTabIcon } = getLeftTabConfig(step);
 
-  const { label: leftTabLabel, Icon: LeftTabIcon } = getLeftTabConfig();
-
-  const writeSheetFromSpreadsheetData = (ws: ExcelJS.Worksheet, data: SpreadsheetData) => {
-    const { values, formats, formulas, columnWidths } = data;
-    values.forEach((row, ri) => {
-      const excelRow = ws.addRow(row.map(v => v ?? ''));
-      row.forEach((_, ci) => {
-        const cell = excelRow.getCell(ci + 1);
-        const formula = formulas?.[ri]?.[ci];
-        if (formula) {
-          cell.value = { formula: formula.startsWith('=') ? formula.slice(1) : formula } as any;
-        }
-        const fmt = formats?.[ri]?.[ci];
-        if (!fmt) return;
-        if (fmt.bold || fmt.italic || fmt.underline || fmt.textColor || fmt.fontSize) {
-          cell.font = {
-            bold: fmt.bold,
-            italic: fmt.italic,
-            underline: fmt.underline ? 'single' : undefined,
-            color: fmt.textColor ? { argb: fmt.textColor.replace('#', 'FF') } : undefined,
-            size: fmt.fontSize,
-          };
-        }
-        if (fmt.bgColor) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fmt.bgColor.replace('#', 'FF') } };
-        }
-        if (fmt.horizontalAlignment) {
-          cell.alignment = { horizontal: fmt.horizontalAlignment as any, vertical: fmt.verticalAlignment as any, wrapText: fmt.wrapText };
-        }
-        if (fmt.numberFormat) {
-          cell.numFmt = fmt.numberFormat;
-        }
-      });
-    });
-    if (columnWidths) {
-      columnWidths.forEach((w, i) => {
-        ws.getColumn(i + 1).width = Math.max(w / 7, 8);
-      });
-    }
-  };
-
+  // Excel download
   const handleDownloadExcel = useCallback(async () => {
     if (!rightSpreadsheetData) return;
     const wb = new ExcelJS.Workbook();
-
     if (baseSheetData) {
       const wsBase = wb.addWorksheet('Base');
       writeSheetFromSpreadsheetData(wsBase, baseSheetData);
     }
-
     const wsFinancials = wb.addWorksheet('Financials');
     writeSheetFromSpreadsheetData(wsFinancials, rightSpreadsheetData);
-
     if (assumptionsSheetData) {
       const wsPremissas = wb.addWorksheet('Premissas');
       writeSheetFromSpreadsheetData(wsPremissas, assumptionsSheetData);
     }
-
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     saveAs(blob, `Constance_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
   }, [rightSpreadsheetData, baseSheetData, assumptionsSheetData]);
 
-  // Render left panel content based on step
+  // ========== Left panel content ==========
+
   const renderLeftPanel = () => {
     switch (step) {
       case 'modelling':
@@ -143,11 +218,11 @@ const Index = () => {
       case 'capex_wc':
         return <CapexWCInput onBack={actions.handleStepBack} onContinue={actions.handleCapexWCContinue} />;
       case 'wacc':
-        return <WACCInput initialParams={waccParams ?? undefined} onBack={actions.handleStepBack} onContinue={actions.handleWACCContinue} />;
+        return <WACCInput initialParams={waccParams} onBack={actions.handleStepBack} onContinue={actions.handleWACCContinue} />;
       case 'terminal_value':
-        return <TerminalValueInput initialParams={tvParams ?? undefined} onBack={actions.handleStepBack} onContinue={actions.handleTerminalValueContinue} />;
+        return <TerminalValueInput initialParams={tvParams} onBack={actions.handleStepBack} onContinue={actions.handleTerminalValueContinue} />;
       case 'equity_bridge':
-        return <EquityBridgeInput initialParams={equityBridge ?? undefined} onBack={actions.handleStepBack} onContinue={actions.handleEquityBridgeContinue} />;
+        return <EquityBridgeInput initialParams={equityBridge} onBack={actions.handleStepBack} onContinue={actions.handleEquityBridgeContinue} />;
       case 'results':
         return valuationResult && waccResult ? (
           <ValuationResultsPanel
@@ -156,7 +231,6 @@ const Index = () => {
             projectedYears={projectedYears}
             sensitivityGrowth={sensitivityGrowth}
             sensitivityMultiple={sensitivityMultiple}
-            currency="BRL"
             onBack={actions.handleStepBack}
           />
         ) : null;
@@ -165,28 +239,7 @@ const Index = () => {
     }
   };
 
-  // Footer status text
-  const getFooterText = () => {
-    switch (step) {
-      case 'modelling': return 'Dados confirmados — Defina o número de anos';
-      case 'assumptions': return 'Colunas projetadas — Defina as premissas';
-      case 'deductions': return 'Receita projetada — Defina as deduções';
-      case 'cogs': return 'Deduções aplicadas — Defina o custo (CMV)';
-      case 'sga': return 'Custos aplicados — Defina as despesas (SG&A)';
-      case 'da': return 'Despesas aplicadas — Defina a D&A';
-      case 'financial_result': return 'D&A aplicada — Defina o Resultado Financeiro';
-      case 'tax': return 'Resultado Financeiro aplicado — Defina os Impostos';
-      case 'capex_wc': return 'DRE projetada — Defina CapEx & Capital de Giro';
-      case 'wacc': return 'FCF configurado — Defina o WACC';
-      case 'terminal_value': return 'WACC definido — Defina o Valor Terminal';
-      case 'equity_bridge': return 'Valor Terminal definido — Defina o Equity Bridge';
-      case 'results': return 'Valuation concluído';
-      default:
-        return leftSpreadsheetData
-          ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
-          : 'Aguardando importação de dados...';
-    }
-  };
+  // ========== Render ==========
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -212,7 +265,7 @@ const Index = () => {
         <div className="w-[40%] border-r border-border flex flex-col">
           {/* Sheet tab */}
           <div className="flex items-center bg-muted/30 border-b border-border">
-           <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
+            <div className="px-3 py-1.5 text-xs font-medium bg-background border-r border-border flex items-center gap-1.5">
               <LeftTabIcon className="w-3.5 h-3.5 text-primary" />
               {leftTabLabel}
             </div>
@@ -276,6 +329,7 @@ const Index = () => {
                 Premissas
               </button>
             )}
+            {/* Dimensions indicator */}
             {activeRightTab === 'financials' && rightSpreadsheetData && (
               <span className="text-xs text-muted-foreground ml-2">
                 {rightSpreadsheetData.rowCount} linhas × {rightSpreadsheetData.colCount} colunas
@@ -337,7 +391,7 @@ const Index = () => {
       {/* Footer */}
       <footer className="border-t border-border bg-muted/30 px-3 py-1 flex items-center text-xs text-muted-foreground">
         <span className="px-2 py-0.5 bg-muted rounded mr-2">fx</span>
-        <span>{getFooterText()}</span>
+        <span>{getFooterText(step, leftSpreadsheetData)}</span>
       </footer>
     </div>
   );
