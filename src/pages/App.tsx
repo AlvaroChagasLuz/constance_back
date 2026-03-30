@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { SpreadsheetData, YearsRowData } from '@/types/spreadsheet';
+import type { FCFAssumptions, WACCParameters, TerminalValueParameters, EquityBridgeParameters, ProjectedYear, ValuationResult, WACCResult, SensitivityMatrix } from '@/engine/types';
 import { VirtualizedSpreadsheet } from '@/components/VirtualizedSpreadsheet';
 import { ExcelUpload } from '@/components/ExcelUpload';
 import { ConfirmationBanner } from '@/components/ConfirmationBanner';
@@ -12,16 +13,23 @@ import { SGAInput } from '@/components/SGAInput';
 import { DAInput } from '@/components/DAInput';
 import { FinancialResultInput } from '@/components/FinancialResultInput';
 import { TaxInput } from '@/components/TaxInput';
+import { CapexWCInput } from '@/components/CapexWCInput';
+import { WACCInput } from '@/components/WACCInput';
+import { TerminalValueInput } from '@/components/TerminalValueInput';
+import { EquityBridgeInput } from '@/components/EquityBridgeInput';
+import { ValuationResultsPanel } from '@/components/ValuationResultsPanel';
 import { addProjectionColumns, applyRevenueProjection, applyDeductionsProjection, applyCOGSProjection, applySGAProjection, applyDAProjection, applyFinancialResultProjection, applyTaxProjection, getProjectedNetRevenue, getProjectedEBIT, getProjectedEBT } from '@/utils/projectionUtils';
 import { buildAssumptionsSheet, buildAssumptionsRowMap, type AssumptionEntry } from '@/utils/assumptionsSheetBuilder';
 import { detectYearsRow, detectLastYearFromData } from '@/utils/yearsRowDetector';
+import { calculateWACC } from '@/engine/wacc';
+import { buildProjectedYears, calculateValuation, buildSensitivityGrowth } from '@/engine/valuation';
 import { useToast } from '@/hooks/use-toast';
-import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download } from 'lucide-react';
+import { TrendingUp, Table2, Settings2, ArrowLeft, BarChart3, FileSpreadsheet, Download, Factory, Percent, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result' | 'tax';
+type AppStep = 'import' | 'confirm' | 'modelling' | 'assumptions' | 'deductions' | 'cogs' | 'sga' | 'da' | 'financial_result' | 'tax' | 'capex_wc' | 'wacc' | 'terminal_value' | 'equity_bridge' | 'results';
 type RightTab = 'base' | 'financials' | 'assumptions';
 
 const Index = () => {
@@ -38,6 +46,18 @@ const Index = () => {
   const [assumptionEntries, setAssumptionEntries] = useState<AssumptionEntry[]>([]);
   const [yearsRowData, setYearsRowData] = useState<YearsRowData | null>(null);
   const [yearsRowWarning, setYearsRowWarning] = useState<string | null>(null);
+
+  // Valuation state
+  const [fcfAssumptions, setFcfAssumptions] = useState<FCFAssumptions | null>(null);
+  const [waccParams, setWaccParams] = useState<WACCParameters | null>(null);
+  const [waccResult, setWaccResult] = useState<WACCResult | null>(null);
+  const [tvParams, setTvParams] = useState<TerminalValueParameters | null>(null);
+  const [equityBridgeParams, setEquityBridgeParams] = useState<EquityBridgeParameters | null>(null);
+  const [projectedYears, setProjectedYears] = useState<ProjectedYear[]>([]);
+  const [valuationResult, setValuationResult] = useState<ValuationResult | null>(null);
+  const [sensitivityGrowth, setSensitivityGrowth] = useState<SensitivityMatrix | null>(null);
+  const [taxRateForValuation, setTaxRateForValuation] = useState(34);
+
   const { toast } = useToast();
 
   // Auto-copy left data to right whenever left changes during import step
@@ -90,17 +110,21 @@ const Index = () => {
     setAssumptionEntries([]);
     setYearsRowData(null);
     setYearsRowWarning(null);
+    setFcfAssumptions(null);
+    setWaccParams(null);
+    setWaccResult(null);
+    setTvParams(null);
+    setEquityBridgeParams(null);
+    setProjectedYears([]);
+    setValuationResult(null);
+    setSensitivityGrowth(null);
     setStep('import');
   }, []);
 
-  // Step 4: "Continuar" in modelling → add projection columns + advance to assumptions
   const handleModellingContinue = useCallback((years: number) => {
     if (!originalRightData) return;
 
-    // Auto-detect last closed year from data
     const lastClosedYear = detectLastYearFromData(originalRightData) ?? (new Date().getFullYear() - 1);
-
-    // Detect years row and classify columns
     const detection = detectYearsRow(originalRightData, lastClosedYear);
     if (detection.success && detection.data) {
       setYearsRowData(detection.data);
@@ -114,7 +138,6 @@ const Index = () => {
     setProjectedBaseData(projected);
     setStep('assumptions');
 
-    // Re-detect after projection columns are added
     if (detection.success) {
       const updatedDetection = detectYearsRow(projected, lastClosedYear);
       if (updatedDetection.success && updatedDetection.data) {
@@ -122,7 +145,6 @@ const Index = () => {
       }
     }
 
-    // Initialize the assumptions sheet (empty entries for now)
     const initialSheet = buildAssumptionsSheet([]);
     setAssumptionsSheetData(initialSheet);
 
@@ -132,19 +154,12 @@ const Index = () => {
     });
   }, [originalRightData, toast]);
 
-  // Step 5a: "Projetar Receita" — apply growth rate to revenue row
   const handleApplyRevenue = useCallback((revenueGrowthRate: number) => {
     if (!projectedBaseData) return;
 
-    // Build updated entries first so we can compute the row map
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Taxa de Crescimento de Receita'),
-      {
-        category: 'Receita',
-        label: 'Taxa de Crescimento de Receita',
-        value: revenueGrowthRate,
-        unit: '% a.a.',
-      },
+      { category: 'Receita', label: 'Taxa de Crescimento de Receita', value: revenueGrowthRate, unit: '% a.a.' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('Taxa de Crescimento de Receita');
@@ -152,248 +167,197 @@ const Index = () => {
     const projected = applyRevenueProjection(projectedBaseData, revenueGrowthRate, originalColCount, premissasRow);
     setRightSpreadsheetData(projected);
     setHasAppliedRevenue(true);
-
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
 
-    toast({
-      title: 'Projeção de receita aplicada!',
-      description: `Taxa de crescimento: ${revenueGrowthRate}% ao ano`,
-    });
+    toast({ title: 'Projeção de receita aplicada!', description: `Taxa de crescimento: ${revenueGrowthRate}% ao ano` });
   }, [projectedBaseData, originalColCount, assumptionEntries, toast]);
 
-  // Step 5b: "Continuar" — advance to deductions step
   const handleAssumptionsContinue = useCallback(() => {
     setStep('deductions');
-    toast({
-      title: 'Projeção de receita confirmada!',
-      description: 'Defina as deduções sobre a receita bruta.',
-    });
+    toast({ title: 'Projeção de receita confirmada!', description: 'Defina as deduções sobre a receita bruta.' });
   }, [toast]);
 
-  // Step 6a: Back from deductions to assumptions
-  const handleDeductionsBack = useCallback(() => {
-    setStep('assumptions');
-  }, []);
+  const handleDeductionsBack = useCallback(() => { setStep('assumptions'); }, []);
 
-  // Step 6b: Continue from deductions — apply deductions to grid, advance to COGS
   const handleDeductionsContinue = useCallback((deductionsPercent: number) => {
     if (!rightSpreadsheetData) return;
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Deduções sobre Receita Bruta'),
-      {
-        category: 'Deduções',
-        label: 'Deduções sobre Receita Bruta',
-        value: deductionsPercent,
-        unit: '% da Receita Bruta',
-      },
+      { category: 'Deduções', label: 'Deduções sobre Receita Bruta', value: deductionsPercent, unit: '% da Receita Bruta' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('Deduções sobre Receita Bruta');
-
     const updated = applyDeductionsProjection(rightSpreadsheetData, deductionsPercent, originalColCount, premissasRow);
     setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
     setStep('cogs');
-
-    toast({
-      title: 'Deduções aplicadas!',
-      description: `${deductionsPercent}% de deduções projetadas em todas as colunas.`,
-    });
+    toast({ title: 'Deduções aplicadas!', description: `${deductionsPercent}% de deduções projetadas.` });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
-  // Step 7a: Back from COGS to deductions
-  const handleCOGSBack = useCallback(() => {
-    setStep('deductions');
-  }, []);
+  const handleCOGSBack = useCallback(() => { setStep('deductions'); }, []);
 
-  // Step 7b: Continue from COGS — apply COGS to grid
   const handleCOGSContinue = useCallback((cogsPercent: number) => {
     if (!rightSpreadsheetData) return;
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Custo (CMV) sobre Receita Líquida'),
-      {
-        category: 'Custos',
-        label: 'Custo (CMV) sobre Receita Líquida',
-        value: cogsPercent,
-        unit: '% da Receita Líquida',
-      },
+      { category: 'Custos', label: 'Custo (CMV) sobre Receita Líquida', value: cogsPercent, unit: '% da Receita Líquida' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('Custo (CMV) sobre Receita Líquida');
-
     const updated = applyCOGSProjection(rightSpreadsheetData, cogsPercent, originalColCount, premissasRow);
     setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
     setStep('sga');
-
-    toast({
-      title: 'Custos aplicados!',
-      description: `${cogsPercent}% de CMV projetado sobre a receita líquida.`,
-    });
+    toast({ title: 'Custos aplicados!', description: `${cogsPercent}% de CMV projetado.` });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
-  // Step 8a: Back from SGA to COGS
-  const handleSGABack = useCallback(() => {
-    setStep('cogs');
-  }, []);
+  const handleSGABack = useCallback(() => { setStep('cogs'); }, []);
 
-  // Step 8b: Continue from SGA — apply SGA to grid, advance to D&A
   const handleSGAContinue = useCallback((sgaPercent: number) => {
     if (!rightSpreadsheetData) return;
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Despesas (SG&A) sobre Lucro Bruto'),
-      {
-        category: 'Despesas',
-        label: 'Despesas (SG&A) sobre Lucro Bruto',
-        value: sgaPercent,
-        unit: '% do Lucro Bruto',
-      },
+      { category: 'Despesas', label: 'Despesas (SG&A) sobre Lucro Bruto', value: sgaPercent, unit: '% do Lucro Bruto' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('Despesas (SG&A) sobre Lucro Bruto');
-
     const updated = applySGAProjection(rightSpreadsheetData, sgaPercent, originalColCount, premissasRow);
     setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
     setStep('da');
-
-    toast({
-      title: 'Despesas aplicadas!',
-      description: `${sgaPercent}% de SG&A projetado sobre o lucro bruto.`,
-    });
+    toast({ title: 'Despesas aplicadas!', description: `${sgaPercent}% de SG&A projetado.` });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
-  // Step 9a: Back from D&A to SGA
-  const handleDABack = useCallback(() => {
-    setStep('sga');
-  }, []);
+  const handleDABack = useCallback(() => { setStep('sga'); }, []);
 
-  // Step 9b: Continue from D&A — apply D&A to grid, advance to financial result
   const handleDAContinue = useCallback((daPercent: number) => {
     if (!rightSpreadsheetData) return;
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'D&A sobre Receita Líquida'),
-      {
-        category: 'D&A',
-        label: 'D&A sobre Receita Líquida',
-        value: daPercent,
-        unit: '% da Receita Líquida',
-      },
+      { category: 'D&A', label: 'D&A sobre Receita Líquida', value: daPercent, unit: '% da Receita Líquida' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('D&A sobre Receita Líquida');
-
     const updated = applyDAProjection(rightSpreadsheetData, daPercent, originalColCount, premissasRow);
     setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
     setStep('financial_result');
-
-    toast({
-      title: 'D&A aplicada!',
-      description: `${daPercent}% de D&A projetado sobre a receita líquida.`,
-    });
+    toast({ title: 'D&A aplicada!', description: `${daPercent}% de D&A projetado.` });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
-  // Step 10a: Back from Financial Result to D&A
-  const handleFinancialResultBack = useCallback(() => {
-    setStep('da');
-  }, []);
+  const handleFinancialResultBack = useCallback(() => { setStep('da'); }, []);
 
-  // Step 10b: Continue from Financial Result — apply to grid, advance to tax
   const handleFinancialResultContinue = useCallback((financialResultPercent: number) => {
     if (!rightSpreadsheetData) return;
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Resultado Financeiro sobre Receita Líquida'),
-      {
-        category: 'Resultado Financeiro',
-        label: 'Resultado Financeiro sobre Receita Líquida',
-        value: financialResultPercent,
-        unit: '% da Receita Líquida',
-      },
+      { category: 'Resultado Financeiro', label: 'Resultado Financeiro sobre Receita Líquida', value: financialResultPercent, unit: '% da Receita Líquida' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('Resultado Financeiro sobre Receita Líquida');
-
     const updated = applyFinancialResultProjection(rightSpreadsheetData, financialResultPercent, originalColCount, premissasRow);
     setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
     setStep('tax');
-
-    toast({
-      title: 'Resultado Financeiro aplicado!',
-      description: `${financialResultPercent}% de resultado financeiro projetado sobre a receita líquida.`,
-    });
+    toast({ title: 'Resultado Financeiro aplicado!', description: `${financialResultPercent}% projetado.` });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
 
-  // Step 11a: Back from Tax to Financial Result
-  const handleTaxBack = useCallback(() => {
-    setStep('financial_result');
-  }, []);
+  const handleTaxBack = useCallback(() => { setStep('financial_result'); }, []);
 
-  // Step 11b: Continue from Tax — apply tax to grid
   const handleTaxContinue = useCallback((taxPercent: number) => {
     if (!rightSpreadsheetData) return;
-
     const newEntries: AssumptionEntry[] = [
       ...assumptionEntries.filter(e => e.label !== 'Impostos sobre EBT'),
-      {
-        category: 'Impostos',
-        label: 'Impostos sobre EBT',
-        value: taxPercent,
-        unit: '% do EBT',
-      },
+      { category: 'Impostos', label: 'Impostos sobre EBT', value: taxPercent, unit: '% do EBT' },
     ];
     const rowMap = buildAssumptionsRowMap(newEntries);
     const premissasRow = rowMap.get('Impostos sobre EBT');
-
     const updated = applyTaxProjection(rightSpreadsheetData, taxPercent, originalColCount, premissasRow);
     setRightSpreadsheetData(updated);
     setAssumptionEntries(newEntries);
     setAssumptionsSheetData(buildAssumptionsSheet(newEntries));
-
-    toast({
-      title: 'Impostos aplicados!',
-      description: `${taxPercent}% de imposto projetado sobre o EBT.`,
-    });
+    setTaxRateForValuation(taxPercent);
+    setStep('capex_wc');
+    toast({ title: 'Impostos aplicados!', description: `${taxPercent}% de imposto projetado.` });
   }, [rightSpreadsheetData, originalColCount, assumptionEntries, toast]);
+
+  // ==================== New DCF Steps ====================
+
+  const handleCapexWCBack = useCallback(() => { setStep('tax'); }, []);
+
+  const handleCapexWCContinue = useCallback((assumptions: FCFAssumptions) => {
+    setFcfAssumptions(assumptions);
+    setStep('wacc');
+    toast({ title: 'CapEx & Capital de Giro definidos!', description: 'Defina o WACC.' });
+  }, [toast]);
+
+  const handleWACCBack = useCallback(() => { setStep('capex_wc'); }, []);
+
+  const handleWACCContinue = useCallback((params: WACCParameters) => {
+    setWaccParams(params);
+    const result = calculateWACC(params);
+    setWaccResult(result);
+    setStep('terminal_value');
+    toast({ title: `WACC: ${result.wacc.toFixed(2)}%`, description: 'Defina o Valor Terminal.' });
+  }, [toast]);
+
+  const handleTerminalValueBack = useCallback(() => { setStep('wacc'); }, []);
+
+  const handleTerminalValueContinue = useCallback((params: TerminalValueParameters) => {
+    setTvParams(params);
+    setStep('equity_bridge');
+    toast({ title: 'Valor Terminal definido!', description: 'Defina o Equity Bridge.' });
+  }, [toast]);
+
+  const handleEquityBridgeBack = useCallback(() => { setStep('terminal_value'); }, []);
+
+  const handleEquityBridgeContinue = useCallback((params: EquityBridgeParameters) => {
+    if (!rightSpreadsheetData || !fcfAssumptions || !waccResult || !tvParams) return;
+
+    setEquityBridgeParams(params);
+
+    // Build projected years & compute valuation
+    const years = buildProjectedYears(rightSpreadsheetData, originalColCount, fcfAssumptions, waccResult, taxRateForValuation);
+    setProjectedYears(years);
+
+    const result = calculateValuation(years, waccResult, tvParams, params);
+    setValuationResult(result);
+
+    // Sensitivity
+    if (tvParams.method === 'gordon_growth' || tvParams.method === 'both') {
+      const sens = buildSensitivityGrowth(years, waccResult.wacc, tvParams.perpetuityGrowthRate, params);
+      setSensitivityGrowth(sens);
+    }
+
+    setStep('results');
+    toast({ title: 'Valuation calculado!', description: 'Veja os resultados.' });
+  }, [rightSpreadsheetData, originalColCount, fcfAssumptions, waccResult, tvParams, taxRateForValuation, toast]);
+
+  const handleResultsBack = useCallback(() => { setStep('equity_bridge'); }, []);
 
   // Left panel tab label & icon based on current step
   const getLeftTabConfig = () => {
     switch (step) {
-      case 'modelling':
-        return { label: 'Modelagem Financeira', Icon: TrendingUp };
-      case 'assumptions':
-        return { label: 'Premissas de Projeção', Icon: BarChart3 };
-      case 'deductions':
-        return { label: 'Deduções de Receita', Icon: BarChart3 };
-      case 'cogs':
-        return { label: 'Custo (CMV)', Icon: BarChart3 };
-      case 'sga':
-        return { label: 'Despesas (SG&A)', Icon: BarChart3 };
-      case 'da':
-        return { label: 'D&A', Icon: BarChart3 };
-      case 'financial_result':
-        return { label: 'Resultado Financeiro', Icon: BarChart3 };
-      case 'tax':
-        return { label: 'Impostos / Tax', Icon: BarChart3 };
-      default:
-        return { label: 'Dados Importados', Icon: Table2 };
+      case 'modelling': return { label: 'Modelagem Financeira', Icon: TrendingUp };
+      case 'assumptions': return { label: 'Premissas de Projeção', Icon: BarChart3 };
+      case 'deductions': return { label: 'Deduções de Receita', Icon: BarChart3 };
+      case 'cogs': return { label: 'Custo (CMV)', Icon: BarChart3 };
+      case 'sga': return { label: 'Despesas (SG&A)', Icon: BarChart3 };
+      case 'da': return { label: 'D&A', Icon: BarChart3 };
+      case 'financial_result': return { label: 'Resultado Financeiro', Icon: BarChart3 };
+      case 'tax': return { label: 'Impostos / Tax', Icon: BarChart3 };
+      case 'capex_wc': return { label: 'CapEx & Capital de Giro', Icon: Factory };
+      case 'wacc': return { label: 'WACC', Icon: Percent };
+      case 'terminal_value': return { label: 'Valor Terminal', Icon: TrendingUp };
+      case 'equity_bridge': return { label: 'Equity Bridge', Icon: BarChart3 };
+      case 'results': return { label: 'Resultado do Valuation', Icon: Trophy };
+      default: return { label: 'Dados Importados', Icon: Table2 };
     }
   };
 
@@ -442,17 +406,14 @@ const Index = () => {
     if (!rightSpreadsheetData) return;
     const wb = new ExcelJS.Workbook();
 
-    // Sheet 1: Base (original data)
     if (baseSheetData) {
       const wsBase = wb.addWorksheet('Base');
       writeSheetFromSpreadsheetData(wsBase, baseSheetData);
     }
 
-    // Sheet 2: Financials (projection working space)
     const wsFinancials = wb.addWorksheet('Financials');
     writeSheetFromSpreadsheetData(wsFinancials, rightSpreadsheetData);
 
-    // Sheet 3: Premissas (assumptions)
     if (assumptionsSheetData) {
       const wsPremissas = wb.addWorksheet('Premissas');
       writeSheetFromSpreadsheetData(wsPremissas, assumptionsSheetData);
@@ -471,77 +432,58 @@ const Index = () => {
       case 'assumptions':
         return <ProjectionAssumptions onApply={handleApplyRevenue} onContinue={handleAssumptionsContinue} hasApplied={hasAppliedRevenue} />;
       case 'deductions':
-        return (
-          <RevenueDeductions
-            onBack={handleDeductionsBack}
-            onContinue={handleDeductionsContinue}
-          />
-        );
+        return <RevenueDeductions onBack={handleDeductionsBack} onContinue={handleDeductionsContinue} />;
       case 'cogs':
-        return (
-          <COGSInput
-            onBack={handleCOGSBack}
-            onContinue={handleCOGSContinue}
-          />
-        );
+        return <COGSInput onBack={handleCOGSBack} onContinue={handleCOGSContinue} />;
       case 'sga':
-        return (
-          <SGAInput
-            onBack={handleSGABack}
-            onContinue={handleSGAContinue}
-          />
-        );
+        return <SGAInput onBack={handleSGABack} onContinue={handleSGAContinue} />;
       case 'da':
-        return (
-          <DAInput
-            onBack={handleDABack}
-            onContinue={handleDAContinue}
-          />
-        );
+        return <DAInput onBack={handleDABack} onContinue={handleDAContinue} />;
       case 'financial_result':
-        return (
-          <FinancialResultInput
-            onBack={handleFinancialResultBack}
-            onContinue={handleFinancialResultContinue}
-          />
-        );
+        return <FinancialResultInput onBack={handleFinancialResultBack} onContinue={handleFinancialResultContinue} />;
       case 'tax':
-        return (
-          <TaxInput
-            ebt={getProjectedEBT(rightSpreadsheetData!, originalColCount)}
-            onBack={handleTaxBack}
-            onContinue={handleTaxContinue}
+        return <TaxInput ebt={getProjectedEBT(rightSpreadsheetData!, originalColCount)} onBack={handleTaxBack} onContinue={handleTaxContinue} />;
+      case 'capex_wc':
+        return <CapexWCInput onBack={handleCapexWCBack} onContinue={handleCapexWCContinue} />;
+      case 'wacc':
+        return <WACCInput initialParams={waccParams ?? undefined} onBack={handleWACCBack} onContinue={handleWACCContinue} />;
+      case 'terminal_value':
+        return <TerminalValueInput initialParams={tvParams ?? undefined} onBack={handleTerminalValueBack} onContinue={handleTerminalValueContinue} />;
+      case 'equity_bridge':
+        return <EquityBridgeInput initialParams={equityBridgeParams ?? undefined} onBack={handleEquityBridgeBack} onContinue={handleEquityBridgeContinue} />;
+      case 'results':
+        return valuationResult && waccResult ? (
+          <ValuationResultsPanel
+            valuationResult={valuationResult}
+            waccResult={waccResult}
+            projectedYears={projectedYears}
+            sensitivityGrowth={sensitivityGrowth}
+            sensitivityMultiple={null}
+            currency="BRL"
+            onBack={handleResultsBack}
           />
-        );
+        ) : null;
       default:
-        return (
-          <ExcelUpload
-            data={leftSpreadsheetData}
-            onDataLoaded={setLeftSpreadsheetData}
-          />
-        );
+        return <ExcelUpload data={leftSpreadsheetData} onDataLoaded={setLeftSpreadsheetData} />;
     }
   };
 
   // Footer status text
   const getFooterText = () => {
     switch (step) {
-      case 'modelling':
-        return 'Dados confirmados — Defina o número de anos';
-      case 'assumptions':
-        return 'Colunas projetadas — Defina as premissas';
-      case 'deductions':
-        return 'Receita projetada — Defina as deduções';
-      case 'cogs':
-        return 'Deduções aplicadas — Defina o custo (CMV)';
-      case 'sga':
-        return 'Custos aplicados — Defina as despesas (SG&A)';
-      case 'da':
-        return 'Despesas aplicadas — Defina a D&A';
-      case 'financial_result':
-        return 'D&A aplicada — Defina o Resultado Financeiro';
-      case 'tax':
-        return 'Resultado Financeiro aplicado — Defina os Impostos';
+      case 'modelling': return 'Dados confirmados — Defina o número de anos';
+      case 'assumptions': return 'Colunas projetadas — Defina as premissas';
+      case 'deductions': return 'Receita projetada — Defina as deduções';
+      case 'cogs': return 'Deduções aplicadas — Defina o custo (CMV)';
+      case 'sga': return 'Custos aplicados — Defina as despesas (SG&A)';
+      case 'da': return 'Despesas aplicadas — Defina a D&A';
+      case 'financial_result': return 'D&A aplicada — Defina o Resultado Financeiro';
+      case 'tax': return 'Resultado Financeiro aplicado — Defina os Impostos';
+      case 'capex_wc': return 'DRE projetada — Defina CapEx & Capital de Giro';
+      case 'wacc': return 'FCF configurado — Defina o WACC';
+      case 'terminal_value': return 'WACC definido — Defina o Valor Terminal';
+      case 'equity_bridge': return 'Valor Terminal definido — Defina o Equity Bridge';
+      case 'results': return 'Valuation concluído';
       default:
         return leftSpreadsheetData
           ? `Importado: ${leftSpreadsheetData.rowCount} linhas × ${leftSpreadsheetData.colCount} colunas — Espelhado automaticamente`
