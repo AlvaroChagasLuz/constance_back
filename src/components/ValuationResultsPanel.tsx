@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Trophy, TrendingUp, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ValuationResult, WACCResult, SensitivityMatrix, ProjectedYear } from '@/engine/types';
 import { formatCompact, formatPercent, formatMultiple, formatNumber } from '@/engine/format';
+import { FootballFieldChart, buildFootballFieldBars } from '@/components/FootballFieldChart';
 
 interface ValuationResultsPanelProps {
   valuationResult: ValuationResult;
@@ -19,10 +20,16 @@ export const ValuationResultsPanel: React.FC<ValuationResultsPanelProps> = ({
   waccResult,
   projectedYears,
   sensitivityGrowth,
+  sensitivityMultiple,
   currency = 'BRL',
   onBack,
 }) => {
   const fmt = (v: number | null) => v !== null ? formatCompact(v, currency) : '—';
+
+  const footballBars = useMemo(
+    () => buildFootballFieldBars(valuationResult, sensitivityGrowth, sensitivityMultiple, currency),
+    [valuationResult, sensitivityGrowth, sensitivityMultiple, currency]
+  );
 
   return (
     <div className="h-full flex flex-col overflow-y-auto animate-fade-in">
@@ -35,6 +42,14 @@ export const ValuationResultsPanel: React.FC<ValuationResultsPanelProps> = ({
       </div>
 
       <div className="flex-1 px-4 pb-6 space-y-4">
+        {/* Football Field Chart */}
+        {footballBars.length > 0 && (
+          <div className="space-y-1.5">
+            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide">Football Field</h3>
+            <FootballFieldChart bars={footballBars} currency={currency} />
+          </div>
+        )}
+
         {/* Main Equity Value cards */}
         {valuationResult.equityValueGordon !== null && (
           <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
