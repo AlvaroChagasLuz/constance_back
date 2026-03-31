@@ -18,6 +18,7 @@ import { TerminalValueInput } from '@/components/TerminalValueInput';
 import { EquityBridgeInput } from '@/components/EquityBridgeInput';
 import { ValuationResultsPanel } from '@/components/ValuationResultsPanel';
 import { useValuationEngine } from '@/hooks/useValuationEngine';
+import { buildDCFSheet } from '@/engine/dcfSheetBuilder';
 import {
   TrendingUp,
   Table2,
@@ -180,6 +181,9 @@ const Index = () => {
   const handleDownloadExcel = useCallback(async () => {
     if (!rightSpreadsheetData) return;
     const wb = new ExcelJS.Workbook();
+    wb.creator = 'Constance';
+    wb.created = new Date();
+
     if (baseSheetData) {
       const wsBase = wb.addWorksheet('Base');
       writeSheetFromSpreadsheetData(wsBase, baseSheetData);
@@ -190,10 +194,28 @@ const Index = () => {
       const wsPremissas = wb.addWorksheet('Premissas');
       writeSheetFromSpreadsheetData(wsPremissas, assumptionsSheetData);
     }
+
+    // DCF Summary sheet (only if valuation is complete)
+    if (valuationResult && waccResult && projectedYears.length > 0) {
+      buildDCFSheet(wb, {
+        projectedYears,
+        waccResult,
+        waccParams: state.waccParams,
+        tvParams: state.tvParams,
+        equityBridge: state.equityBridge,
+        valuationResult,
+        sensitivityGrowth,
+        sensitivityMultiple,
+        incomeStatement: state.incomeStatement,
+        fcfAssumptions: state.fcfAssumptions,
+        currency: 'BRL',
+      });
+    }
+
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `Constance_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-  }, [rightSpreadsheetData, baseSheetData, assumptionsSheetData]);
+    saveAs(blob, `Constance_Valuation_${new Date().toISOString().split('T')[0]}.xlsx`);
+  }, [rightSpreadsheetData, baseSheetData, assumptionsSheetData, valuationResult, waccResult, projectedYears, sensitivityGrowth, sensitivityMultiple, state.waccParams, state.tvParams, state.equityBridge, state.incomeStatement, state.fcfAssumptions]);
 
   // ========== Left panel content ==========
 
