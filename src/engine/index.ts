@@ -83,3 +83,7 @@ export {
   formatMultiple,
   formatNumber,
 } from './format';
+
+// DCF Sheet Builder (Excel export)
+export { buildDCFSheet } from './dcfSheetBuilder';
+export type { DCFSheetData } from './dcfSheetBuilder';
